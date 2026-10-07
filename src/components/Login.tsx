@@ -19,7 +19,7 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
     <div className="login-wrap">
       <form className="card login-card" onSubmit={handleSubmit}>
         <h1>🤖 AI Learning Tracker</h1>
-        <p className="muted">Sign in to track your learning journey</p>
+        <p className="muted">Sign in to track your AI learning journey</p>
         <label>
           Username
           <input
