@@ -1,6 +1,6 @@
 import { PROJECTS } from "../data/roadmap";
 import { useEffect, useState } from "react";
-import { loadLeaderboard } from "../storage";
+import { getErrorMessage, loadLeaderboard } from "../storage";
 import type { LeaderboardEntry } from "../storage";
 import ProgressBar from "./ProgressBar";
 
@@ -29,9 +29,7 @@ export default function GroupProgress({
       .catch((loadError: unknown) => {
         if (active) {
           setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Unable to load the group leaderboard.",
+            getErrorMessage(loadError, "Unable to load the group leaderboard."),
           );
         }
       });

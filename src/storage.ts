@@ -27,6 +27,19 @@ function getClient() {
   return supabase;
 }
 
+export function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export async function loadProgress(user: User): Promise<UserProgress> {
   const { data, error } = await getClient()
     .from("user_progress")
@@ -43,14 +56,13 @@ export async function loadProgress(user: User): Promise<UserProgress> {
       }
     : emptyProgress();
 
-  await saveProgress(user, progress);
   return progress;
 }
 
 export async function saveProgress(
   user: User,
   progress: UserProgress,
-): Promise<void> {
+): Promise<string | null> {
   const client = getClient();
   const { error: progressError } = await client.from("user_progress").upsert(
     {
@@ -80,7 +92,10 @@ export async function saveProgress(
       { onConflict: "user_id" },
     );
 
-  if (leaderboardError) throw leaderboardError;
+  if (leaderboardError) {
+    return `Progress saved, but the leaderboard could not be updated: ${leaderboardError.message}`;
+  }
+  return null;
 }
 
 export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {

@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { User } from "../data/users";
 import { ALL_TOPIC_IDS, PROJECTS } from "../data/roadmap";
 import { completedProjects, getAchievements, topicPercent } from "../progress";
-import { emptyProgress, loadProgress, saveProgress } from "../storage";
+import {
+  emptyProgress,
+  getErrorMessage,
+  loadProgress,
+  saveProgress,
+} from "../storage";
 import type { ProjectStatus, UserProgress } from "../storage";
 import ProgressBar from "./ProgressBar";
 import Roadmap from "./Roadmap";
@@ -48,10 +53,7 @@ export default function Dashboard({
           setLoadResult({
             userId: user.id,
             attempt: loadAttempt,
-            error:
-              error instanceof Error
-                ? error.message
-                : "Unable to load progress.",
+            error: getErrorMessage(error, "Unable to load progress."),
           });
         }
       });
@@ -64,11 +66,12 @@ export default function Dashboard({
     setProgress(next);
     setSaveError("");
     saveQueue.current = saveQueue.current
-      .then(() => saveProgress(user, next))
+      .then(async () => {
+        const warning = await saveProgress(user, next);
+        if (warning) setSaveError(warning);
+      })
       .catch((error: unknown) => {
-        setSaveError(
-          error instanceof Error ? error.message : "Unable to save progress.",
-        );
+        setSaveError(getErrorMessage(error, "Unable to save progress."));
       });
   }
 
