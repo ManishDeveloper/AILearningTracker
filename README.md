@@ -35,7 +35,9 @@ See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rule
 
 The app uses Supabase Auth and the `user_progress` table for accounts and personal progress. The `user_progress` table must have row-level security policies that restrict reads and writes to `auth.uid() = user_id`.
 
-Run [`supabase-leaderboard.sql`](supabase-leaderboard.sql) in the Supabase SQL Editor to create the aggregate-only table used by the Group tab. Signed-in users can read leaderboard summaries, but cannot read another user's detailed progress.
+Run [`supabase-leaderboard.sql`](supabase-leaderboard.sql) and [`supabase-topic-resources.sql`](supabase-topic-resources.sql) in the Supabase SQL Editor. The second script creates the shared topic resource table: authenticated users can read all topic links and add links under their own user ID.
+
+If the topic resources table already exists, run the updated [`supabase-topic-resources.sql`](supabase-topic-resources.sql) again to add and backfill the resource author's display name. The script is safe to rerun.
 
 Copy `.env.example` to `.env.local` and fill in the Supabase project URL and publishable key. `.env.local` is ignored by Git. Add the same variables in Vercel under **Settings > Environment Variables**, then redeploy:
 

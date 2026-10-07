@@ -1,4 +1,4 @@
-import { completedProjects, getAchievements, topicPercent } from "./progress";
+import { completedProjects, topicPercent } from "./progress";
 import type { User } from "./data/users";
 import { supabase } from "./supabase";
 
@@ -19,7 +19,6 @@ export interface LeaderboardEntry {
   display_name: string;
   progress_percent: number;
   completed_projects: number;
-  achievements_unlocked: number;
 }
 
 function getClient() {
@@ -84,9 +83,6 @@ export async function saveProgress(
         display_name: user.displayName,
         progress_percent: topicPercent(progress),
         completed_projects: completedProjects(progress),
-        achievements_unlocked: getAchievements(progress).filter(
-          (a) => a.unlocked,
-        ).length,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },
@@ -101,9 +97,7 @@ export async function saveProgress(
 export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
   const { data, error } = await getClient()
     .from("user_leaderboard")
-    .select(
-      "user_id, display_name, progress_percent, completed_projects, achievements_unlocked",
-    );
+    .select("user_id, display_name, progress_percent, completed_projects");
 
   if (error) throw error;
   return data ?? [];

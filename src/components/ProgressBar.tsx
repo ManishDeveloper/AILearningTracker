@@ -1,3 +1,5 @@
+import { Progress } from "@mantine/core";
+
 export default function ProgressBar({
   percent,
   small = false,
@@ -6,14 +8,13 @@ export default function ProgressBar({
   small?: boolean;
 }) {
   return (
-    <div
-      className={`progress ${small ? "progress-sm" : ""}`}
-      role="progressbar"
-      aria-valuenow={percent}
-      aria-valuemin={0}
-      aria-valuemax={100}
-    >
-      <div className="progress-fill" style={{ width: `${percent}%` }} />
-    </div>
+    <Progress
+      className={`app-progress ${small ? "app-progress-small" : ""}`}
+      value={percent}
+      size={small ? 6 : 10}
+      radius="xl"
+      color="teal"
+      aria-label="Progress"
+    />
   );
 }
