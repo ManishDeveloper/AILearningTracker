@@ -1,31 +1,90 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { authenticate } from "../data/users";
-import type { User } from "../data/users";
+import { supabase } from "../supabase";
 
-export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
-  const [username, setUsername] = useState("");
+export default function Login() {
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [busy, setBusy] = useState(false);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const user = authenticate(username, password);
-    if (user) onLogin(user);
-    else setError("Invalid username or password");
+    setError("");
+    setMessage("");
+
+    if (!supabase) {
+      setError(
+        "Supabase is not configured. Add the project URL and publishable key to .env.local, then restart the app.",
+      );
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        const { data, error: signupError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { display_name: displayName.trim() },
+            emailRedirectTo: window.location.origin,
+          },
+        });
+        if (signupError) throw signupError;
+        if (!data.session) {
+          setMessage(
+            "Account created. Check your email to confirm your address, then log in.",
+          );
+        }
+      } else {
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (loginError) throw loginError;
+      }
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to authenticate.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div className="login-wrap">
       <form className="card login-card" onSubmit={handleSubmit}>
         <h1>🤖 AI Learning Tracker</h1>
-        <p className="muted">Sign in to track your AI learning journey</p>
+        <p className="muted">
+          {mode === "login"
+            ? "Sign in to track your AI learning journey"
+            : "Create an account to get started"}
+        </p>
+        {mode === "signup" && (
+          <label>
+            Display name
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="name"
+              required
+            />
+          </label>
+        )}
         <label>
-          Username
+          Email
           <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             autoFocus
             required
           />
@@ -36,13 +95,34 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
+            autoComplete={
+              mode === "login" ? "current-password" : "new-password"
+            }
+            minLength={6}
             required
           />
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="submit" className="btn-primary">
-          Log in
+        {message && <p className="muted">{message}</p>}
+        <button type="submit" className="btn-primary" disabled={busy}>
+          {busy
+            ? "Please wait..."
+            : mode === "login"
+              ? "Log in"
+              : "Create account"}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          onClick={() => {
+            setMode(mode === "login" ? "signup" : "login");
+            setError("");
+            setMessage("");
+          }}
+        >
+          {mode === "login"
+            ? "Create an account"
+            : "Already have an account? Log in"}
         </button>
       </form>
     </div>

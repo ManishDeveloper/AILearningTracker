@@ -1,3 +1,7 @@
+import { completedProjects, getAchievements, topicPercent } from "./progress";
+import type { User } from "./data/users";
+import { supabase } from "./supabase";
+
 export type ProjectStatus = "not-started" | "in-progress" | "completed";
 
 export interface UserProgress {
@@ -5,45 +9,87 @@ export interface UserProgress {
   projects: Record<string, ProjectStatus>;
 }
 
-const PROGRESS_KEY = "alt.progress";
-const SESSION_KEY = "alt.session";
-
-type ProgressStore = Record<string, UserProgress>;
-
-const emptyProgress = (): UserProgress => ({
+export const emptyProgress = (): UserProgress => ({
   completedTopics: [],
   projects: {},
 });
 
-function readStore(): ProgressStore {
-  try {
-    return JSON.parse(
-      localStorage.getItem(PROGRESS_KEY) ?? "{}",
-    ) as ProgressStore;
-  } catch {
-    return {};
-  }
+export interface LeaderboardEntry {
+  user_id: string;
+  display_name: string;
+  progress_percent: number;
+  completed_projects: number;
+  achievements_unlocked: number;
 }
 
-export function loadAllProgress(): ProgressStore {
-  return readStore();
+function getClient() {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  return supabase;
 }
 
-export function loadProgress(username: string): UserProgress {
-  return { ...emptyProgress(), ...readStore()[username] };
+export async function loadProgress(user: User): Promise<UserProgress> {
+  const { data, error } = await getClient()
+    .from("user_progress")
+    .select("completed_topics, projects")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  const progress = data
+    ? {
+        completedTopics: data.completed_topics ?? [],
+        projects: (data.projects ?? {}) as Record<string, ProjectStatus>,
+      }
+    : emptyProgress();
+
+  await saveProgress(user, progress);
+  return progress;
 }
 
-export function saveProgress(username: string, progress: UserProgress): void {
-  const store = readStore();
-  store[username] = progress;
-  localStorage.setItem(PROGRESS_KEY, JSON.stringify(store));
+export async function saveProgress(
+  user: User,
+  progress: UserProgress,
+): Promise<void> {
+  const client = getClient();
+  const { error: progressError } = await client.from("user_progress").upsert(
+    {
+      user_id: user.id,
+      completed_topics: progress.completedTopics,
+      projects: progress.projects,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (progressError) throw progressError;
+
+  const { error: leaderboardError } = await client
+    .from("user_leaderboard")
+    .upsert(
+      {
+        user_id: user.id,
+        display_name: user.displayName,
+        progress_percent: topicPercent(progress),
+        completed_projects: completedProjects(progress),
+        achievements_unlocked: getAchievements(progress).filter(
+          (a) => a.unlocked,
+        ).length,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+
+  if (leaderboardError) throw leaderboardError;
 }
 
-export function loadSession(): string | null {
-  return localStorage.getItem(SESSION_KEY);
-}
+export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
+  const { data, error } = await getClient()
+    .from("user_leaderboard")
+    .select(
+      "user_id, display_name, progress_percent, completed_projects, achievements_unlocked",
+    );
 
-export function saveSession(username: string | null): void {
-  if (username) localStorage.setItem(SESSION_KEY, username);
-  else localStorage.removeItem(SESSION_KEY);
+  if (error) throw error;
+  return data ?? [];
 }
