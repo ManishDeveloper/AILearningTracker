@@ -1,13 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Alert,
-  Badge,
-  Group,
-  Stack,
-  Text,
-  ThemeIcon,
-  Title,
-} from "@mantine/core";
+import { Alert, Badge, Group, Stack, Text, Title } from "@mantine/core";
 import { IconAlertCircle, IconTrophy, IconUsers } from "@tabler/icons-react";
 import { completedTopicCount, topicPercent } from "../progress";
 import { LEADERBOARD_UPDATED_EVENT } from "../leaderboardEvents";
