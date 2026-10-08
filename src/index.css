@@ -457,6 +457,10 @@ select {
     color 160ms ease;
 }
 
+.app-tabs .mantine-Tabs-tabLabel {
+  flex: 0 0 auto;
+}
+
 .app-tabs .mantine-Tabs-tab[data-active] {
   color: #126e5d;
   background: #e8f4ee;
