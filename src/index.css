@@ -148,14 +148,14 @@ select {
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.4fr);
   grid-template-areas: "content sidebar";
   align-items: start;
-  gap: 24px;
+  gap: 16px;
 }
 
 .dashboard-content {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   grid-area: content;
 }
 
@@ -337,8 +337,8 @@ select {
   max-width: none;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 34px clamp(18px, 4vw, 72px) 64px;
+  gap: 20px;
+  padding: 20px clamp(16px, 2vw, 32px) 64px;
 }
 
 .nav-target-date {
@@ -516,7 +516,7 @@ select {
 }
 
 .roadmap-stack {
-  gap: 16px;
+  gap: 12px;
 }
 
 .roadmap-topic-row {
@@ -881,7 +881,7 @@ select {
 }
 
 .group-progress-list {
-  max-height: min(480px, 55vh);
+  max-height: min(360px, 45vh);
   overflow-y: auto;
   padding-right: 4px;
 }
