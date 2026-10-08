@@ -38,7 +38,13 @@ The app uses Supabase Auth and the `user_progress` table for accounts and person
 Run [`supabase-leaderboard.sql`](supabase-leaderboard.sql), [`supabase-topic-resources.sql`](supabase-topic-resources.sql), and [`supabase-user-projects.sql`](supabase-user-projects.sql) in the Supabase SQL Editor. Topic resources and user projects are shared with authenticated users; owners can edit or delete only their own entries.
 Run [`supabase-leaderboard.sql`](supabase-leaderboard.sql), [`supabase-topic-resources.sql`](supabase-topic-resources.sql), [`supabase-user-projects.sql`](supabase-user-projects.sql), [`supabase-points.sql`](supabase-points.sql), and [`supabase-group-profiles.sql`](supabase-group-profiles.sql) in this order in the Supabase SQL Editor. The group-profile policy exposes completed-topic IDs to signed-in learners; personal account data and write access remain restricted. Topic resources and user projects are shared with authenticated users; owners can edit or delete only their own entries. The points script installs scoring triggers and backfills existing activity totals.
 
-Points are awarded as follows: completing a topic adds 10, adding a resource adds 20, and adding a project adds 100. Unchecking a topic or deleting a resource/project reverses those points; editing a resource or project does not award points again.
+Run [`supabase-topic-progress.sql`](supabase-topic-progress.sql) once to enable per-topic statuses and day timers.
+
+Run or rerun [`supabase-activity.sql`](supabase-activity.sql) after the project and topic-resource tables are installed. It records topic starts/completions, new projects, and new resources, and enables category filters, links, unread counts, and clap reactions.
+
+Rerun [`supabase-points.sql`](supabase-points.sql) after adding new Auth users to backfill their initial zero-point leaderboard entry. The signup trigger in that script creates an entry for future accounts automatically.
+
+Points are awarded as follows: completing a topic adds the points shown on the roadmap, adding a resource adds 20, and adding a project adds 100. Unchecking a topic or deleting a resource/project reverses those points; editing a resource or project does not award points again. Rerun [`supabase-points.sql`](supabase-points.sql) to apply the roadmap scoring and recalculate existing leaderboard totals.
 
 If the topic resources table already exists, run the updated [`supabase-topic-resources.sql`](supabase-topic-resources.sql) again to add/backfill author names and enable owner-only edit/delete policies. The script is safe to rerun.
 

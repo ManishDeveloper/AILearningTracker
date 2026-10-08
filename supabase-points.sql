@@ -15,6 +15,39 @@ create policy "Authenticated users can view points"
 on public.user_points for select to authenticated
 using (true);
 
+create or replace function public.initialize_user_points()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  resolved_display_name text;
+begin
+  resolved_display_name := coalesce(
+    nullif(new.raw_user_meta_data ->> 'display_name', ''),
+    nullif(split_part(new.email, '@', 1), ''),
+    'Learner'
+  );
+
+  insert into public.user_points (user_id, display_name, points_total)
+  values (new.id, resolved_display_name, 0)
+  on conflict (user_id) do update
+  set display_name = excluded.display_name,
+      updated_at = now();
+
+  return new;
+end;
+$$;
+
+revoke all on function public.initialize_user_points()
+  from public, anon, authenticated;
+
+drop trigger if exists initialize_user_points_after_signup on auth.users;
+create trigger initialize_user_points_after_signup
+after insert on auth.users
+for each row execute function public.initialize_user_points();
+
 create or replace function public.apply_user_points(
   p_user_id uuid,
   p_delta integer,
@@ -54,6 +87,76 @@ $$;
 revoke all on function public.apply_user_points(uuid, integer, text)
   from public, anon, authenticated;
 
+create or replace function public.roadmap_topic_points(p_topic_id text)
+returns integer
+language sql
+immutable
+parallel safe
+as $$
+  select case p_topic_id
+    when 'm1t1' then 15
+    when 'm1t2' then 15
+    when 'm1t3' then 15
+    when 'm1t4' then 15
+    when 'm1t5' then 20
+    when 'm1t6' then 20
+    when 'm1t7' then 25
+    when 'm2t1' then 10
+    when 'm2t2' then 15
+    when 'm2t3' then 15
+    when 'm2t4' then 15
+    when 'm2t5' then 20
+    when 'm2t6' then 20
+    when 'm2t7' then 15
+    when 'm2t8' then 20
+    when 'm2t9' then 15
+    when 'm2t10' then 30
+    when 'm3t1' then 10
+    when 'm3t2' then 15
+    when 'm3t3' then 15
+    when 'm3t4' then 20
+    when 'm3t5' then 20
+    when 'm3t6' then 20
+    when 'm3t7' then 20
+    when 'm3t8' then 20
+    when 'm3t9' then 25
+    when 'm3t10' then 30
+    when 'm4t1' then 10
+    when 'm4t2' then 25
+    when 'm4t3' then 20
+    when 'm4t4' then 30
+    when 'm4t5' then 40
+    when 'm4t6' then 20
+    when 'm4t7' then 25
+    when 'm4t8' then 15
+    when 'm4t9' then 20
+    when 'm4t10' then 30
+    when 'm4t11' then 35
+    when 'm4t12' then 35
+    when 'm4t13' then 35
+    when 'm4t14' then 35
+    when 'm4t15' then 40
+    when 'm4t16' then 30
+    when 'm5t1' then 15
+    when 'm5t2' then 20
+    when 'm5t3' then 30
+    when 'm5t4' then 30
+    when 'm5t5' then 35
+    when 'm5t6' then 35
+    when 'm5t7' then 35
+    when 'm5t8' then 35
+    when 'm5t9' then 40
+    when 'm5t10' then 35
+    when 'm5t11' then 35
+    when 'm5t12' then 30
+    when 'm5t13' then 40
+    else 0
+  end;
+$$;
+
+revoke all on function public.roadmap_topic_points(text)
+  from public, anon, authenticated;
+
 create or replace function public.score_completed_topics()
 returns trigger
 language plpgsql
@@ -61,22 +164,28 @@ security definer
 set search_path = public, auth
 as $$
 declare
-  added_count integer := 0;
-  removed_count integer := 0;
+  added_points integer := 0;
+  removed_points integer := 0;
   point_delta integer;
 begin
   if tg_op = 'INSERT' then
-    select count(distinct topic_id)
-    into added_count
-    from jsonb_array_elements_text(
-      coalesce(to_jsonb(new.completed_topics), '[]'::jsonb)
-    ) as topics(topic_id);
+    select coalesce(sum(public.roadmap_topic_points(topics.topic_id)), 0)::integer
+    into added_points
+    from (
+      select distinct topic_id
+      from jsonb_array_elements_text(
+        coalesce(to_jsonb(new.completed_topics), '[]'::jsonb)
+      ) as completed(topic_id)
+    ) as topics;
   else
-    select count(distinct new_topics.topic_id)
-    into added_count
-    from jsonb_array_elements_text(
-      coalesce(to_jsonb(new.completed_topics), '[]'::jsonb)
-    ) as new_topics(topic_id)
+    select coalesce(sum(public.roadmap_topic_points(new_topics.topic_id)), 0)::integer
+    into added_points
+    from (
+      select distinct topic_id
+      from jsonb_array_elements_text(
+        coalesce(to_jsonb(new.completed_topics), '[]'::jsonb)
+      ) as completed(topic_id)
+    ) as new_topics
     where not exists (
       select 1
       from jsonb_array_elements_text(
@@ -85,11 +194,14 @@ begin
       where old_topics.topic_id = new_topics.topic_id
     );
 
-    select count(distinct old_topics.topic_id)
-    into removed_count
-    from jsonb_array_elements_text(
-      coalesce(to_jsonb(old.completed_topics), '[]'::jsonb)
-    ) as old_topics(topic_id)
+    select coalesce(sum(public.roadmap_topic_points(old_topics.topic_id)), 0)::integer
+    into removed_points
+    from (
+      select distinct topic_id
+      from jsonb_array_elements_text(
+        coalesce(to_jsonb(old.completed_topics), '[]'::jsonb)
+      ) as completed(topic_id)
+    ) as old_topics
     where not exists (
       select 1
       from jsonb_array_elements_text(
@@ -99,7 +211,7 @@ begin
     );
   end if;
 
-  point_delta := (added_count - removed_count) * 10;
+  point_delta := added_points - removed_points;
   if point_delta <> 0 then
     perform public.apply_user_points(new.user_id, point_delta);
   end if;
@@ -170,15 +282,18 @@ create trigger score_project_delete
 after delete on public.user_projects
 for each row execute function public.score_project_changes();
 
-with topic_points as (
+with completed_topic_points as (
   select
-    progress.user_id,
-    count(distinct topic.topic_id)::integer * 10 as points
-  from public.user_progress as progress
-  cross join lateral jsonb_array_elements_text(
-    coalesce(to_jsonb(progress.completed_topics), '[]'::jsonb)
-  ) as topic(topic_id)
-  group by progress.user_id
+    completed.user_id,
+    sum(public.roadmap_topic_points(completed.topic_id))::integer as points
+  from (
+    select distinct progress.user_id, topic.topic_id
+    from public.user_progress as progress
+    cross join lateral jsonb_array_elements_text(
+      coalesce(to_jsonb(progress.completed_topics), '[]'::jsonb)
+    ) as topic(topic_id)
+  ) as completed
+  group by completed.user_id
 ), resource_points as (
   select added_by as user_id, count(*)::integer * 20 as points
   from public.topic_resources
@@ -196,11 +311,12 @@ select
     nullif(split_part(auth_user.email, '@', 1), ''),
     'Learner'
   ),
-  coalesce(topic_points.points, 0)
+  coalesce(completed_topic_points.points, 0)
     + coalesce(resource_points.points, 0)
     + coalesce(project_points.points, 0)
 from auth.users as auth_user
-left join topic_points on topic_points.user_id = auth_user.id
+left join completed_topic_points
+  on completed_topic_points.user_id = auth_user.id
 left join resource_points on resource_points.user_id = auth_user.id
 left join project_points on project_points.user_id = auth_user.id
 on conflict (user_id) do update

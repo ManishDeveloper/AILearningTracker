@@ -53,6 +53,16 @@ export async function loadUserProjects(userId: string): Promise<UserProject[]> {
   return data ?? [];
 }
 
+export async function loadAllUserProjects(): Promise<UserProject[]> {
+  const { data, error } = await getClient()
+    .from("user_projects")
+    .select(PROJECT_COLUMNS)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function addUserProject(
   project: ProjectInput,
 ): Promise<UserProject> {

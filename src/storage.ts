@@ -1,13 +1,24 @@
 import { completedTopicCount, topicPercent } from "./progress";
+import { ALL_TOPIC_IDS } from "./data/roadmap";
 import type { User } from "./data/users";
 import { supabase } from "./supabase";
 
 export interface UserProgress {
   completedTopics: string[];
+  topicDetails: Record<string, TopicDetail>;
+}
+
+export type TopicStatus = "not_started" | "in_progress" | "complete";
+
+export interface TopicDetail {
+  status: TopicStatus;
+  durationHours: number;
+  startedAt: string | null;
 }
 
 export const emptyProgress = (): UserProgress => ({
   completedTopics: [],
+  topicDetails: {},
 });
 
 export interface LeaderboardEntry {
@@ -44,17 +55,55 @@ export async function loadProgress(user: User): Promise<UserProgress> {
 export async function loadUserProgress(userId: string): Promise<UserProgress> {
   const { data, error } = await getClient()
     .from("user_progress")
-    .select("completed_topics")
+    .select("completed_topics, topic_details")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (error) throw error;
 
-  const progress = data
-    ? {
-        completedTopics: data.completed_topics ?? [],
-      }
-    : emptyProgress();
+  const completedTopics: string[] = data?.completed_topics ?? [];
+  const topicDetails: Record<string, TopicDetail> = {};
+
+  for (const [topicId, storedDetail] of Object.entries(
+    data?.topic_details ?? {},
+  )) {
+    if (!ALL_TOPIC_IDS.includes(topicId)) continue;
+    const legacyDetail = storedDetail as TopicDetail & {
+      durationDays?: number;
+    };
+    topicDetails[topicId] = {
+      status: legacyDetail.status,
+      durationHours:
+        legacyDetail.durationHours ?? (legacyDetail.durationDays ?? 1) * 24,
+      startedAt: legacyDetail.startedAt ?? null,
+    };
+  }
+
+  for (const topicId of completedTopics) {
+    if (!ALL_TOPIC_IDS.includes(topicId)) continue;
+    topicDetails[topicId] = {
+      status: "complete",
+      durationHours: topicDetails[topicId]?.durationHours ?? 24,
+      startedAt: null,
+    };
+  }
+
+  const activeTopics = Object.entries(topicDetails)
+    .filter(([, detail]) => detail.status === "in_progress")
+    .sort(
+      ([, a], [, b]) =>
+        (Date.parse(a.startedAt ?? "") || 0) -
+        (Date.parse(b.startedAt ?? "") || 0),
+    );
+  for (const [topicId, detail] of activeTopics.slice(1)) {
+    topicDetails[topicId] = {
+      ...detail,
+      status: "not_started",
+      startedAt: null,
+    };
+  }
+
+  const progress = { completedTopics, topicDetails };
 
   return progress;
 }
@@ -68,6 +117,7 @@ export async function saveProgress(
     {
       user_id: user.id,
       completed_topics: progress.completedTopics,
+      topic_details: progress.topicDetails,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" },

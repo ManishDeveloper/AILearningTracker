@@ -47,7 +47,12 @@ export default function App() {
   }
 
   return user ? (
-    <Dashboard key={user.id} user={user} onLogout={logout} />
+    <Dashboard
+      key={user.id}
+      user={user}
+      onLogout={logout}
+      onUserUpdated={setUser}
+    />
   ) : (
     <Login />
   );

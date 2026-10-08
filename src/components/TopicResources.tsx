@@ -52,14 +52,17 @@ export default function TopicResources({
   user,
   resourceCount,
   onCountChange,
+  openRequest = 0,
 }: {
   topicId: string;
   topicTitle: string;
   user: User;
   resourceCount: number;
   onCountChange: (topicId: string, delta: number) => void;
+  openRequest?: number;
 }) {
   const [opened, setOpened] = useState(false);
+  const [dismissedOpenRequest, setDismissedOpenRequest] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [resources, setResources] = useState<TopicResource[]>([]);
   const [editingResource, setEditingResource] = useState<TopicResource | null>(
@@ -81,9 +84,10 @@ export default function TopicResources({
       resourceType !== editingResource.resource_type ||
       description.trim() !== (editingResource.description ?? "")
     : true;
+  const modalOpened = opened || openRequest > dismissedOpenRequest;
 
   useEffect(() => {
-    if (!opened) return;
+    if (!modalOpened) return;
 
     let active = true;
     setLoading(true);
@@ -109,7 +113,7 @@ export default function TopicResources({
     return () => {
       active = false;
     };
-  }, [opened, topicId]);
+  }, [modalOpened, topicId]);
 
   useEffect(() => {
     if (!successMessage) return;
@@ -120,6 +124,7 @@ export default function TopicResources({
 
   function closeModal() {
     setOpened(false);
+    setDismissedOpenRequest(openRequest);
     setShowForm(false);
     setEditingResource(null);
     setConfirmDeleteId(null);
@@ -256,7 +261,7 @@ export default function TopicResources({
       </Button>
 
       <Modal
-        opened={opened}
+        opened={modalOpened}
         onClose={closeModal}
         title={
           <Group

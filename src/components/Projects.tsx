@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ActionIcon,
   Alert,
+  Accordion,
   Badge,
   Button,
   Card,
@@ -27,6 +28,7 @@ import {
   IconPencil,
   IconPlus,
   IconRocket,
+  IconTrophy,
   IconTrash,
 } from "@tabler/icons-react";
 import type { User } from "../data/users";
@@ -34,11 +36,11 @@ import { ROADMAP } from "../data/roadmap";
 import {
   addUserProject,
   deleteUserProject,
-  loadUserProjects,
+  loadAllUserProjects,
   updateUserProject,
 } from "../projects";
 import type { ProjectInput, UserProject } from "../projects";
-import { getErrorMessage } from "../storage";
+import { getErrorMessage, loadLeaderboard } from "../storage";
 import { notifyLeaderboardUpdated } from "../leaderboardEvents";
 
 interface Props {
@@ -64,6 +66,10 @@ function parseOptionalUrl(value: string, label: string): string | null {
 
 export default function Projects({ user }: Props) {
   const [projects, setProjects] = useState<UserProject[]>([]);
+  const [projectUsers, setProjectUsers] = useState<
+    { userId: string; displayName: string; label: string }[]
+  >([]);
+  const [projectFilter, setProjectFilter] = useState(user.id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -89,9 +95,35 @@ export default function Projects({ user }: Props) {
 
   useEffect(() => {
     let active = true;
-    loadUserProjects(user.id)
-      .then((items) => {
+    Promise.all([loadAllUserProjects(), loadLeaderboard()])
+      .then(([items, learners]) => {
         if (active) setProjects(items);
+        if (active) {
+          const names = new Map(
+            learners.map((learner) => [learner.user_id, learner.display_name]),
+          );
+          for (const project of items) {
+            if (!names.has(project.user_id)) {
+              names.set(project.user_id, project.display_name);
+            }
+          }
+          names.set(user.id, user.displayName);
+          const otherUsers = Array.from(names)
+            .filter(([userId]) => userId !== user.id)
+            .map(([userId, displayName]) => ({
+              userId,
+              displayName,
+              label: displayName,
+            }));
+          setProjectUsers([
+            {
+              userId: user.id,
+              displayName: user.displayName,
+              label: "My Projects",
+            },
+            ...otherUsers,
+          ]);
+        }
       })
       .catch((loadError: unknown) => {
         if (active) {
@@ -105,7 +137,24 @@ export default function Projects({ user }: Props) {
     return () => {
       active = false;
     };
-  }, [user.id]);
+  }, [user.id, user.displayName]);
+
+  const projectFilterOptions = [
+    { value: user.id, label: "My Projects" },
+    ...projectUsers
+      .filter((projectUser) => projectUser.userId !== user.id)
+      .map(({ userId, displayName }) => ({
+        value: userId,
+        label: displayName,
+      })),
+  ];
+
+  const visibleProjects = projects.filter((project) => {
+    return project.user_id === projectFilter;
+  });
+  const selectedLearnerName =
+    projectUsers.find((learner) => learner.userId === projectFilter)
+      ?.displayName ?? "this learner";
 
   function resetForm() {
     setOpened(false);
@@ -175,6 +224,7 @@ export default function Projects({ user }: Props) {
       } else {
         const created = await addUserProject(projectInput);
         setProjects((current) => [created, ...current]);
+        setProjectFilter(user.id);
         notifyLeaderboardUpdated();
       }
       resetForm();
@@ -225,27 +275,49 @@ export default function Projects({ user }: Props) {
         </Portal>
       )}
       <Stack gap="lg" className="projects-page">
-        <Group justify="space-between" align="center">
+        <Group justify="space-between" align="center" wrap="wrap">
           <div>
-            <Text className="eyebrow">BUILD AND SHARE</Text>
             <Title order={2}>Projects</Title>
+            <Group className="projects-subheading" gap="xs" wrap="wrap">
+              <Text size="sm" c="dimmed">
+                Add a project and share what you built.
+              </Text>
+              <Badge
+                color="orange"
+                variant="light"
+                leftSection={<IconTrophy size={13} />}
+              >
+                +100 points
+              </Badge>
+            </Group>
           </div>
-          <Button
-            leftSection={<IconPlus size={17} />}
-            onClick={() => {
-              setError("");
-              setSuccessMessage("");
-              setEditingProject(null);
-              setModuleId(ROADMAP[0]?.id ?? "");
-              setTitle("");
-              setLiveUrl("");
-              setGithubUrl("");
-              setDescription("");
-              setOpened(true);
-            }}
-          >
-            Add Project
-          </Button>
+          <Group gap="sm" wrap="wrap">
+            <Select
+              aria-label="Filter projects by learner"
+              data={projectFilterOptions}
+              value={projectFilter}
+              onChange={(value) => value && setProjectFilter(value)}
+              allowDeselect={false}
+              disabled={loading}
+              w={190}
+            />
+            <Button
+              leftSection={<IconPlus size={17} />}
+              onClick={() => {
+                setError("");
+                setSuccessMessage("");
+                setEditingProject(null);
+                setModuleId(ROADMAP[0]?.id ?? "");
+                setTitle("");
+                setLiveUrl("");
+                setGithubUrl("");
+                setDescription("");
+                setOpened(true);
+              }}
+            >
+              Add Project
+            </Button>
+          </Group>
         </Group>
 
         {error && !opened && (
@@ -256,158 +328,190 @@ export default function Projects({ user }: Props) {
 
         {loading ? (
           <Text c="dimmed">Loading projects...</Text>
-        ) : error && !opened ? null : projects.length === 0 ? (
+        ) : error && !opened ? null : visibleProjects.length === 0 ? (
           <div className="projects-empty-state">
             <ThemeIcon size={48} radius="xl" color="teal" variant="light">
               <IconRocket size={23} />
             </ThemeIcon>
-            <Title order={3}>No projects added yet</Title>
+            <Title order={3}>
+              {projectFilter === user.id
+                ? "No projects added yet"
+                : "No projects found"}
+            </Title>
             <Text c="dimmed" size="sm">
-              Add a project to keep your work organized by roadmap module.
+              {projectFilter === user.id
+                ? "Add a project to keep your work organized by roadmap module."
+                : `No projects from ${selectedLearnerName} yet.`}
             </Text>
           </div>
         ) : (
-          <Stack gap="xl">
+          <Accordion
+            key={projectFilter}
+            className="projects-accordion"
+            multiple
+            variant="separated"
+            defaultValue={[
+              ROADMAP.find((module) =>
+                visibleProjects.some(
+                  (project) => project.module_id === module.id,
+                ),
+              )?.id ?? "",
+            ].filter(Boolean)}
+          >
             {ROADMAP.map((module, index) => {
-              const moduleProjects = projects.filter(
+              const moduleProjects = visibleProjects.filter(
                 (project) => project.module_id === module.id,
               );
               return (
-                <section className="project-module-section" key={module.id}>
-                  <Group justify="space-between" mb="sm">
-                    <div>
-                      <Text className="eyebrow">
-                        MODULE {String(index + 1).padStart(2, "0")}
-                      </Text>
-                      <Title order={3}>{module.title}</Title>
-                    </div>
-                    <Badge color="gray" variant="light">
-                      {moduleProjects.length} projects
-                    </Badge>
-                  </Group>
+                <Accordion.Item
+                  className="project-module-accordion"
+                  key={module.id}
+                  value={module.id}
+                >
+                  <Accordion.Control className="project-module-control">
+                    <Group justify="space-between" wrap="nowrap" pr="sm">
+                      <div>
+                        <Text className="eyebrow">
+                          MODULE {String(index + 1).padStart(2, "0")}
+                        </Text>
+                        <Title order={3}>{module.title}</Title>
+                      </div>
+                      <Badge color="gray" variant="light">
+                        {moduleProjects.length} projects
+                      </Badge>
+                    </Group>
+                  </Accordion.Control>
 
-                  {moduleProjects.length === 0 ? (
-                    <Text className="project-module-empty" c="dimmed" size="sm">
-                      No projects in this module yet.
-                    </Text>
-                  ) : (
-                    <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
-                      {moduleProjects.map((project) => (
-                        <Card
-                          key={project.id}
-                          className="learner-project-card"
-                          radius="md"
-                          withBorder
-                        >
-                          <Group justify="space-between" align="flex-start">
-                            <ThemeIcon
-                              color="teal"
-                              variant="light"
-                              size={40}
-                              radius="md"
-                            >
-                              <IconRocket size={20} />
-                            </ThemeIcon>
-                            <Text size="xs" c="dimmed">
-                              By {project.display_name}
-                            </Text>
-                          </Group>
-                          <div className="learner-project-copy">
-                            <Title order={4}>{project.title}</Title>
-                            {project.description && (
-                              <Text c="dimmed" size="sm">
-                                {project.description}
-                              </Text>
-                            )}
-                          </div>
-                          {(project.live_url || project.github_url) && (
-                            <Group gap="xs">
-                              {project.live_url && (
-                                <Button
-                                  component="a"
-                                  href={project.live_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  variant="light"
-                                  size="xs"
-                                  leftSection={<IconExternalLink size={14} />}
-                                >
-                                  Live Project
-                                </Button>
-                              )}
-                              {project.github_url && (
-                                <Button
-                                  component="a"
-                                  href={project.github_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  variant="default"
-                                  size="xs"
-                                  leftSection={<IconBrandGithub size={14} />}
-                                >
-                                  GitHub
-                                </Button>
-                              )}
-                            </Group>
-                          )}
-                          {project.user_id === user.id && (
-                            <Group justify="flex-end" gap="xs">
-                              <Tooltip label="Edit project">
-                                <ActionIcon
-                                  variant="subtle"
-                                  color="teal"
-                                  aria-label={`Edit ${project.title}`}
-                                  onClick={() => startEdit(project)}
-                                >
-                                  <IconPencil size={17} />
-                                </ActionIcon>
-                              </Tooltip>
-                              <Tooltip label="Remove project">
-                                <ActionIcon
-                                  variant="subtle"
-                                  color="red"
-                                  aria-label={`Remove ${project.title}`}
-                                  onClick={() => setConfirmDeleteId(project.id)}
-                                >
-                                  <IconTrash size={17} />
-                                </ActionIcon>
-                              </Tooltip>
-                            </Group>
-                          )}
-                          {confirmDeleteId === project.id && (
-                            <Group
-                              className="project-delete-confirm"
-                              justify="space-between"
-                            >
-                              <Text size="xs">Remove this project?</Text>
-                              <Group gap="xs">
-                                <Button
-                                  size="xs"
-                                  variant="subtle"
-                                  color="gray"
-                                  onClick={() => setConfirmDeleteId(null)}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  size="xs"
-                                  color="red"
-                                  loading={deletingId === project.id}
-                                  onClick={() => void removeProject(project.id)}
-                                >
-                                  Remove
-                                </Button>
+                  <Accordion.Panel className="project-module-panel">
+                    {moduleProjects.length === 0 ? (
+                      <Text
+                        className="project-module-empty"
+                        c="dimmed"
+                        size="sm"
+                      >
+                        No projects in this module yet.
+                      </Text>
+                    ) : (
+                      <SimpleGrid cols={1} spacing="sm">
+                        {moduleProjects.map((project) => (
+                          <Card
+                            key={project.id}
+                            className="learner-project-card"
+                            radius="md"
+                            withBorder
+                          >
+                            <div className="learner-project-copy">
+                              <Group
+                                className="project-title-row"
+                                justify="space-between"
+                                align="center"
+                                wrap="nowrap"
+                              >
+                                <Title order={4}>{project.title}</Title>
+                                {project.user_id === user.id && (
+                                  <Group
+                                    className="project-card-actions"
+                                    gap="xs"
+                                    wrap="nowrap"
+                                  >
+                                    <Tooltip label="Edit project">
+                                      <ActionIcon
+                                        variant="subtle"
+                                        color="teal"
+                                        aria-label={`Edit ${project.title}`}
+                                        onClick={() => startEdit(project)}
+                                      >
+                                        <IconPencil size={17} />
+                                      </ActionIcon>
+                                    </Tooltip>
+                                    <Tooltip label="Remove project">
+                                      <ActionIcon
+                                        variant="subtle"
+                                        color="red"
+                                        aria-label={`Remove ${project.title}`}
+                                        onClick={() =>
+                                          setConfirmDeleteId(project.id)
+                                        }
+                                      >
+                                        <IconTrash size={17} />
+                                      </ActionIcon>
+                                    </Tooltip>
+                                  </Group>
+                                )}
                               </Group>
-                            </Group>
-                          )}
-                        </Card>
-                      ))}
-                    </SimpleGrid>
-                  )}
-                </section>
+                              {project.description && (
+                                <Text c="dimmed" size="sm">
+                                  {project.description}
+                                </Text>
+                              )}
+                            </div>
+                            {(project.live_url || project.github_url) && (
+                              <Group gap="xs">
+                                {project.live_url && (
+                                  <Button
+                                    component="a"
+                                    href={project.live_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    variant="light"
+                                    size="xs"
+                                    leftSection={<IconExternalLink size={14} />}
+                                  >
+                                    Live Project
+                                  </Button>
+                                )}
+                                {project.github_url && (
+                                  <Button
+                                    component="a"
+                                    href={project.github_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    variant="default"
+                                    size="xs"
+                                    leftSection={<IconBrandGithub size={14} />}
+                                  >
+                                    GitHub
+                                  </Button>
+                                )}
+                              </Group>
+                            )}
+                            {confirmDeleteId === project.id && (
+                              <Group
+                                className="project-delete-confirm"
+                                justify="space-between"
+                              >
+                                <Text size="xs">Remove this project?</Text>
+                                <Group gap="xs">
+                                  <Button
+                                    size="xs"
+                                    variant="subtle"
+                                    color="gray"
+                                    onClick={() => setConfirmDeleteId(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    size="xs"
+                                    color="red"
+                                    loading={deletingId === project.id}
+                                    onClick={() =>
+                                      void removeProject(project.id)
+                                    }
+                                  >
+                                    Remove
+                                  </Button>
+                                </Group>
+                              </Group>
+                            )}
+                          </Card>
+                        ))}
+                      </SimpleGrid>
+                    )}
+                  </Accordion.Panel>
+                </Accordion.Item>
               );
             })}
-          </Stack>
+          </Accordion>
         )}
 
         <Modal

@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   Alert,
-  Anchor,
   Badge,
+  Button,
   Card,
-  Checkbox,
   Group,
   Loader,
   Modal,
@@ -12,14 +11,12 @@ import {
   Stack,
   Tabs,
   Text,
-  ThemeIcon,
   Title,
 } from "@mantine/core";
 import {
   IconAlertCircle,
   IconBrandGithub,
   IconExternalLink,
-  IconRocket,
   IconTrophy,
 } from "@tabler/icons-react";
 import { ROADMAP } from "../data/roadmap";
@@ -27,8 +24,15 @@ import { loadUserProjects } from "../projects";
 import type { UserProject } from "../projects";
 import { getErrorMessage, loadUserProgress } from "../storage";
 import type { LeaderboardEntry, UserProgress } from "../storage";
+import {
+  completedTopicCount,
+  formatTopicDuration,
+  formatTopicTimeRemaining,
+  topicCountdown,
+} from "../progress";
 import ProgressBar from "./ProgressBar";
 import RankConfetti from "./RankConfetti";
+import PointsGuide from "./PointsGuide";
 
 function LearnerRoadmap({ progress }: { progress: UserProgress }) {
   const totalTopics = ROADMAP.reduce(
@@ -42,6 +46,7 @@ function LearnerRoadmap({ progress }: { progress: UserProgress }) {
         <Title order={3}>Roadmap</Title>
         <Text size="sm" c="dimmed">
           {progress.completedTopics.length}/{totalTopics} topics complete
+          {completedTopicCount(progress)}/{totalTopics} topics complete
         </Text>
       </Group>
       <Stack gap="sm">
@@ -72,17 +77,55 @@ function LearnerRoadmap({ progress }: { progress: UserProgress }) {
               <ProgressBar percent={percent} small />
               <Stack gap={0} mt="xs">
                 {module.topics.map((topic) => {
-                  const isCompleted = progress.completedTopics.includes(
-                    topic.id,
+                  const detail = progress.topicDetails[topic.id] ?? {
+                    status: progress.completedTopics.includes(topic.id)
+                      ? "complete"
+                      : "not_started",
+                    durationHours: 24,
+                    startedAt: null,
+                  };
+                  const timeRemaining = topicCountdown(
+                    detail.startedAt,
+                    detail.durationHours,
                   );
                   return (
-                    <Checkbox
+                    <Group
                       key={topic.id}
-                      className={`learner-profile-topic ${isCompleted ? "is-completed" : ""}`}
-                      checked={isCompleted}
-                      disabled
-                      label={topic.title}
-                    />
+                      className="learner-profile-topic"
+                      justify="space-between"
+                      wrap="nowrap"
+                      gap="xs"
+                    >
+                      <Text size="sm">{topic.title}</Text>
+                      <Group gap="xs" wrap="nowrap">
+                        <Badge
+                          color={
+                            detail.status === "complete"
+                              ? "teal"
+                              : detail.status === "in_progress"
+                                ? "orange"
+                                : "gray"
+                          }
+                          variant="light"
+                        >
+                          {detail.status === "not_started"
+                            ? "Not started"
+                            : detail.status === "in_progress"
+                              ? "In progress"
+                              : "Complete"}
+                        </Badge>
+                        <Text
+                          size="xs"
+                          c="dimmed"
+                          className="learner-topic-days"
+                        >
+                          {detail.status === "in_progress" &&
+                          timeRemaining !== null
+                            ? formatTopicTimeRemaining(timeRemaining)
+                            : formatTopicDuration(detail.durationHours)}
+                        </Text>
+                      </Group>
+                    </Group>
                   );
                 })}
               </Stack>
@@ -124,60 +167,52 @@ function LearnerProjects({ projects }: { projects: UserProject[] }) {
                 {moduleProjects.length} projects
               </Badge>
             </Group>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+            <SimpleGrid cols={1} spacing="xs">
               {moduleProjects.map((project) => (
                 <Card
-                  className="learner-profile-project"
+                  className="learner-project-card"
                   key={project.id}
                   radius="md"
                   withBorder
                 >
-                  <Group gap="xs" wrap="nowrap">
-                    <ThemeIcon
-                      size={28}
-                      radius="sm"
-                      color="teal"
-                      variant="light"
-                    >
-                      <IconRocket size={15} />
-                    </ThemeIcon>
-                    <Text fw={600} size="sm" lineClamp={1}>
-                      {project.title}
-                    </Text>
-                  </Group>
-                  {project.description && (
-                    <Text size="xs" c="dimmed" mt={4}>
-                      {project.description}
-                    </Text>
+                  <div className="learner-project-copy">
+                    <Title order={4}>{project.title}</Title>
+                    {project.description && (
+                      <Text c="dimmed" size="sm">
+                        {project.description}
+                      </Text>
+                    )}
+                  </div>
+                  {(project.live_url || project.github_url) && (
+                    <Group gap="xs">
+                      {project.live_url && (
+                        <Button
+                          component="a"
+                          href={project.live_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          variant="light"
+                          size="xs"
+                          leftSection={<IconExternalLink size={14} />}
+                        >
+                          Live Project
+                        </Button>
+                      )}
+                      {project.github_url && (
+                        <Button
+                          component="a"
+                          href={project.github_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          variant="default"
+                          size="xs"
+                          leftSection={<IconBrandGithub size={14} />}
+                        >
+                          GitHub
+                        </Button>
+                      )}
+                    </Group>
                   )}
-                  <Group gap="sm" mt="xs">
-                    {project.live_url && (
-                      <Anchor
-                        href={project.live_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        size="xs"
-                      >
-                        <Group gap={4} wrap="nowrap">
-                          <IconExternalLink size={13} />
-                          <span>Live</span>
-                        </Group>
-                      </Anchor>
-                    )}
-                    {project.github_url && (
-                      <Anchor
-                        href={project.github_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        size="xs"
-                      >
-                        <Group gap={4} wrap="nowrap">
-                          <IconBrandGithub size={13} />
-                          <span>GitHub</span>
-                        </Group>
-                      </Anchor>
-                    )}
-                  </Group>
                 </Card>
               ))}
             </SimpleGrid>
@@ -292,9 +327,12 @@ export default function LearnerProfileModal({
                 <Text size="sm" c="dimmed">
                   {learner.progress_percent}% roadmap
                 </Text>
-                <Badge color="orange" variant="light" size="lg">
-                  {learner.points_total} pts
-                </Badge>
+                <Group gap="xs" wrap="nowrap">
+                  <Badge color="orange" variant="light" size="lg">
+                    {learner.points_total} pts
+                  </Badge>
+                  <PointsGuide />
+                </Group>
               </div>
             </Group>
             <div className="learner-profile-progress learner-profile-summary-content">

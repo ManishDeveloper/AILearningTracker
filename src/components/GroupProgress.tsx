@@ -8,6 +8,7 @@ import type { LeaderboardEntry, UserProgress } from "../storage";
 import ProgressBar from "./ProgressBar";
 import LearnerProfileModal from "./LearnerProfileModal";
 import RankConfetti from "./RankConfetti";
+import PointsGuide from "./PointsGuide";
 
 function firstName(displayName: string): string {
   return displayName.trim().split(/\s+/)[0] || displayName;
@@ -140,9 +141,12 @@ export default function GroupProgress({
             <Text size="xs" c="dimmed">
               {currentEntry.progress_percent}%
             </Text>
-            <Badge color="orange" variant="light">
-              {currentEntry.points_total} pts
-            </Badge>
+            <Group gap={4} wrap="nowrap">
+              <Badge color="orange" variant="light">
+                {currentEntry.points_total} pts
+              </Badge>
+              <PointsGuide />
+            </Group>
           </div>
         </div>
         <div className="group-current-progress-bar">
