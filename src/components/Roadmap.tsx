@@ -1,4 +1,5 @@
 import { ROADMAP } from "../data/roadmap";
+import { useEffect, useRef, useState } from "react";
 import {
   Badge,
   Card,
@@ -19,6 +20,8 @@ import {
 import ProgressBar from "./ProgressBar";
 import TopicResources from "./TopicResources";
 import type { User } from "../data/users";
+import { loadTopicResourceCounts } from "../resources";
+import type { TopicResourceCounts } from "../resources";
 
 const MODULE_ICONS = [
   IconCode,
@@ -36,6 +39,44 @@ interface Props {
 }
 
 export default function Roadmap({ user, completedTopics, onToggle }: Props) {
+  const [resourceCounts, setResourceCounts] = useState<TopicResourceCounts>({});
+  const pendingCountChanges = useRef<TopicResourceCounts>({});
+  const countsLoaded = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    loadTopicResourceCounts()
+      .then((counts) => {
+        for (const [topicId, delta] of Object.entries(
+          pendingCountChanges.current,
+        )) {
+          counts[topicId] = Math.max(0, (counts[topicId] ?? 0) + delta);
+        }
+        if (active) {
+          setResourceCounts(counts);
+          countsLoaded.current = true;
+        }
+      })
+      .catch(() => {
+        if (active) countsLoaded.current = true;
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function changeResourceCount(topicId: string, delta: number) {
+    if (!countsLoaded.current) {
+      pendingCountChanges.current[topicId] =
+        (pendingCountChanges.current[topicId] ?? 0) + delta;
+    }
+    setResourceCounts((current) => ({
+      ...current,
+      [topicId]: Math.max(0, (current[topicId] ?? 0) + delta),
+    }));
+  }
+
   return (
     <div className="stack">
       {ROADMAP.map((mod, i) => {
@@ -85,6 +126,8 @@ export default function Roadmap({ user, completedTopics, onToggle }: Props) {
                       topicId={t.id}
                       topicTitle={t.title}
                       user={user}
+                      resourceCount={resourceCounts[t.id] ?? 0}
+                      onCountChange={changeResourceCount}
                     />
                   </div>
                 );

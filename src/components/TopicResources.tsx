@@ -8,23 +8,35 @@ import {
   Group,
   Loader,
   Modal,
+  Notification,
+  Portal,
   Select,
   Stack,
   Text,
   TextInput,
   Textarea,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconAlertCircle,
+  IconCircleCheck,
   IconExternalLink,
   IconFolder,
+  IconPencil,
   IconPlus,
+  IconTrash,
   IconX,
 } from "@tabler/icons-react";
 import type { User } from "../data/users";
-import { addTopicResource, loadTopicResources } from "../resources";
+import {
+  addTopicResource,
+  deleteTopicResource,
+  loadTopicResources,
+  updateTopicResource,
+} from "../resources";
 import type { ResourceType, TopicResource } from "../resources";
 import { getErrorMessage } from "../storage";
+import { notifyLeaderboardUpdated } from "../leaderboardEvents";
 
 const RESOURCE_TYPES: { value: ResourceType; label: string }[] = [
   { value: "video", label: "Video" },
@@ -38,21 +50,37 @@ export default function TopicResources({
   topicId,
   topicTitle,
   user,
+  resourceCount,
+  onCountChange,
 }: {
   topicId: string;
   topicTitle: string;
   user: User;
+  resourceCount: number;
+  onCountChange: (topicId: string, delta: number) => void;
 }) {
   const [opened, setOpened] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [resources, setResources] = useState<TopicResource[]>([]);
+  const [editingResource, setEditingResource] = useState<TopicResource | null>(
+    null,
+  );
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [resourceType, setResourceType] = useState<ResourceType>("video");
   const [description, setDescription] = useState("");
+  const hasChanges = editingResource
+    ? title.trim() !== editingResource.title ||
+      url.trim() !== editingResource.url ||
+      resourceType !== editingResource.resource_type ||
+      description.trim() !== (editingResource.description ?? "")
+    : true;
 
   useEffect(() => {
     if (!opened) return;
@@ -83,15 +111,47 @@ export default function TopicResources({
     };
   }, [opened, topicId]);
 
+  useEffect(() => {
+    if (!successMessage) return;
+
+    const timeout = window.setTimeout(() => setSuccessMessage(""), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [successMessage]);
+
   function closeModal() {
     setOpened(false);
     setShowForm(false);
+    setEditingResource(null);
+    setConfirmDeleteId(null);
     setError("");
+    setSuccessMessage("");
+  }
+
+  function resetForm() {
+    setShowForm(false);
+    setEditingResource(null);
+    setTitle("");
+    setUrl("");
+    setResourceType("video");
+    setDescription("");
+  }
+
+  function beginEditing(resource: TopicResource) {
+    setEditingResource(resource);
+    setTitle(resource.title);
+    setUrl(resource.url);
+    setResourceType(resource.resource_type);
+    setDescription(resource.description ?? "");
+    setConfirmDeleteId(null);
+    setError("");
+    setSuccessMessage("");
+    setShowForm(true);
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setSuccessMessage("");
 
     let parsedUrl: URL;
     try {
@@ -107,22 +167,40 @@ export default function TopicResources({
     }
 
     setSaving(true);
+    const wasEditing = Boolean(editingResource);
     try {
-      const created = await addTopicResource({
-        topicId,
+      const changes = {
         title,
         url: parsedUrl.toString(),
         resourceType,
         description,
-        userId: user.id,
-        displayName: user.displayName,
-      });
-      setResources((current) => [created, ...current]);
-      setTitle("");
-      setUrl("");
-      setResourceType("video");
-      setDescription("");
-      setShowForm(false);
+      };
+
+      if (editingResource) {
+        const updated = await updateTopicResource(editingResource.id, changes);
+        setResources((current) =>
+          current.map((resource) =>
+            resource.id === updated.id ? updated : resource,
+          ),
+        );
+      } else {
+        const created = await addTopicResource({
+          topicId,
+          ...changes,
+          userId: user.id,
+          displayName: user.displayName,
+        });
+        setResources((current) => [created, ...current]);
+        onCountChange(topicId, 1);
+        notifyLeaderboardUpdated();
+      }
+
+      resetForm();
+      setSuccessMessage(
+        wasEditing
+          ? "Resource updated successfully."
+          : "Resource added successfully.",
+      );
     } catch (saveError: unknown) {
       setError(getErrorMessage(saveError, "Unable to save this resource."));
     } finally {
@@ -130,17 +208,51 @@ export default function TopicResources({
     }
   }
 
+  async function removeResource(resourceId: string) {
+    setError("");
+    setSuccessMessage("");
+    setDeletingId(resourceId);
+    try {
+      await deleteTopicResource(resourceId);
+      setResources((current) =>
+        current.filter((resource) => resource.id !== resourceId),
+      );
+      onCountChange(topicId, -1);
+      notifyLeaderboardUpdated();
+      setConfirmDeleteId(null);
+      setSuccessMessage("Resource removed successfully.");
+    } catch (deleteError: unknown) {
+      setError(getErrorMessage(deleteError, "Unable to remove this resource."));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <>
+      {successMessage && (
+        <Portal>
+          <Notification
+            className="resource-toast"
+            color="teal"
+            icon={<IconCircleCheck size={18} />}
+            title="Success"
+            onClose={() => setSuccessMessage("")}
+          >
+            {successMessage}
+          </Notification>
+        </Portal>
+      )}
+
       <Button
         className="topic-resource-button"
         variant="default"
         size="xs"
         leftSection={<IconFolder size={14} stroke={1.8} />}
-        aria-label={`Resources for ${topicTitle}`}
+        aria-label={`Resources for ${topicTitle}: ${resourceCount} resources`}
         onClick={() => setOpened(true)}
       >
-        Resources
+        Resources ({resourceCount})
       </Button>
 
       <Modal
@@ -152,7 +264,13 @@ export default function TopicResources({
             justify="space-between"
             wrap="nowrap"
           >
-            <Text fw={700}>Resources</Text>
+            <Text fw={700}>
+              {showForm
+                ? editingResource
+                  ? "Update Resource"
+                  : "Add Resource"
+                : "Resources"}
+            </Text>
             <Group gap="xs" wrap="nowrap">
               {!showForm && (
                 <Button
@@ -160,6 +278,8 @@ export default function TopicResources({
                   leftSection={<IconPlus size={15} />}
                   onClick={() => {
                     setError("");
+                    setSuccessMessage("");
+                    setEditingResource(null);
                     setShowForm(true);
                   }}
                 >
@@ -192,7 +312,6 @@ export default function TopicResources({
               {error}
             </Alert>
           )}
-
           {showForm && (
             <form className="resource-form" onSubmit={handleSubmit}>
               <TextInput
@@ -234,72 +353,145 @@ export default function TopicResources({
                 <Button
                   variant="subtle"
                   color="gray"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => {
+                    resetForm();
+                    setError("");
+                  }}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" loading={saving}>
-                  Save resource
+                <Button type="submit" loading={saving} disabled={!hasChanges}>
+                  Save Resource
                 </Button>
               </Group>
             </form>
           )}
 
-          {loading ? (
-            <Group justify="center" py="lg">
-              <Loader size="sm" color="teal" />
-            </Group>
-          ) : resources.length === 0 ? (
-            <Text className="resource-empty-state" c="dimmed" size="sm">
-              No shared resources for this topic yet.
-            </Text>
-          ) : (
-            <Stack gap={0} className="resource-list">
-              {resources.map((resource) => (
-                <article className="resource-item" key={resource.id}>
-                  <Group justify="space-between" align="flex-start" gap="md">
-                    <div className="resource-item-copy">
-                      <Group gap="xs" mb={4}>
-                        <Badge size="xs" variant="light" color="teal">
-                          {RESOURCE_TYPES.find(
-                            (type) => type.value === resource.resource_type,
-                          )?.label ?? "Other"}
-                        </Badge>
-                        <Text size="xs" c="dimmed">
-                          {new Date(resource.created_at).toLocaleDateString()}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          Added by {resource.added_by_name}
-                        </Text>
+          {!showForm &&
+            (loading ? (
+              <Group justify="center" py="lg">
+                <Loader size="sm" color="teal" />
+              </Group>
+            ) : resources.length === 0 ? (
+              <Text className="resource-empty-state" c="dimmed" size="sm">
+                No shared resources for this topic yet.
+              </Text>
+            ) : (
+              <Stack gap={0} className="resource-list">
+                {resources.map((resource) => (
+                  <article className="resource-item" key={resource.id}>
+                    <Group justify="space-between" align="flex-start" gap="md">
+                      <div className="resource-item-copy">
+                        <Group gap="xs" mb={4}>
+                          <Badge size="xs" variant="light" color="teal">
+                            {RESOURCE_TYPES.find(
+                              (type) => type.value === resource.resource_type,
+                            )?.label ?? "Other"}
+                          </Badge>
+                          <Text size="xs" c="dimmed">
+                            {new Date(resource.created_at).toLocaleDateString()}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            Added by {resource.added_by_name}
+                          </Text>
+                        </Group>
+                        <Anchor
+                          href={resource.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          fw={600}
+                          className="resource-link"
+                        >
+                          {resource.title}
+                        </Anchor>
+                        {resource.description && (
+                          <Text size="sm" c="dimmed" mt={4}>
+                            {resource.description}
+                          </Text>
+                        )}
+                      </div>
+                      <Group className="resource-actions" gap={4} wrap="nowrap">
+                        {resource.added_by === user.id && (
+                          <>
+                            <Tooltip label="Edit resource">
+                              <ActionIcon
+                                variant="subtle"
+                                color="teal"
+                                size="sm"
+                                className="resource-action"
+                                aria-label={`Edit ${resource.title}`}
+                                onClick={() => beginEditing(resource)}
+                              >
+                                <IconPencil size={17} />
+                              </ActionIcon>
+                            </Tooltip>
+                            <Tooltip label="Remove resource">
+                              <ActionIcon
+                                variant="subtle"
+                                color="teal"
+                                size="sm"
+                                className="resource-action"
+                                aria-label={`Remove ${resource.title}`}
+                                onClick={() => {
+                                  setError("");
+                                  setConfirmDeleteId((current) =>
+                                    current === resource.id
+                                      ? null
+                                      : resource.id,
+                                  );
+                                }}
+                              >
+                                <IconTrash size={17} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </>
+                        )}
+                        <ActionIcon
+                          component="a"
+                          href={resource.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          variant="subtle"
+                          color="teal"
+                          size="sm"
+                          className="resource-action"
+                          aria-label={`Open ${resource.title}`}
+                        >
+                          <IconExternalLink size={17} />
+                        </ActionIcon>
                       </Group>
-                      <Anchor
-                        href={resource.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        fw={600}
-                        className="resource-link"
+                    </Group>
+                    {confirmDeleteId === resource.id && (
+                      <Group
+                        className="resource-delete-confirm"
+                        justify="space-between"
+                        mt="sm"
                       >
-                        {resource.title}
-                      </Anchor>
-                      {resource.description && (
-                        <Text size="sm" c="dimmed" mt={4}>
-                          {resource.description}
-                        </Text>
-                      )}
-                    </div>
-                    <Anchor
-                      href={resource.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Open ${resource.title}`}
-                    >
-                      <IconExternalLink size={17} />
-                    </Anchor>
-                  </Group>
-                </article>
-              ))}
-            </Stack>
-          )}
+                        <Text size="sm">Remove this shared resource?</Text>
+                        <Group gap="xs">
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            color="gray"
+                            onClick={() => setConfirmDeleteId(null)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="xs"
+                            color="red"
+                            loading={deletingId === resource.id}
+                            onClick={() => void removeResource(resource.id)}
+                          >
+                            Remove
+                          </Button>
+                        </Group>
+                      </Group>
+                    )}
+                  </article>
+                ))}
+              </Stack>
+            ))}
         </Stack>
       </Modal>
     </>

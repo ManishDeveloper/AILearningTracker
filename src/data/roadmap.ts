@@ -10,12 +10,6 @@ export interface Module {
   topics: Topic[];
 }
 
-export interface Project {
-  id: string;
-  title: string;
-  description: string;
-}
-
 export const ROADMAP: Module[] = [
   {
     id: "m1",
@@ -125,39 +119,6 @@ export const ROADMAP: Module[] = [
         title: "Present your work and reflect on what you learned",
       },
     ],
-  },
-];
-
-export const PROJECTS: Project[] = [
-  {
-    id: "p1",
-    title: "House price predictor",
-    description: "Regression model with scikit-learn.",
-  },
-  {
-    id: "p2",
-    title: "Image classifier",
-    description: "Train a small CNN on a public dataset.",
-  },
-  {
-    id: "p3",
-    title: "Chat with your docs",
-    description: "RAG demo over a few PDFs.",
-  },
-  {
-    id: "p4",
-    title: "Mini AI agent",
-    description: "An LLM agent that calls a simple tool.",
-  },
-  {
-    id: "p5",
-    title: "Python task tracker",
-    description: "Build a small command-line app that saves and loads tasks.",
-  },
-  {
-    id: "p6",
-    title: "Python data exploration",
-    description: "Use Pandas to explore a dataset and explain a few findings.",
   },
 ];
 

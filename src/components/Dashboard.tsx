@@ -5,7 +5,9 @@ import {
   Container,
   Group,
   Menu,
+  Notification,
   Paper,
+  Portal,
   Tabs,
   Text,
   ThemeIcon,
@@ -19,6 +21,7 @@ import {
   IconRobot,
   IconAlertCircle,
   IconChevronDown,
+  IconCircleCheck,
 } from "@tabler/icons-react";
 import type { User } from "../data/users";
 import {
@@ -27,7 +30,8 @@ import {
   loadProgress,
   saveProgress,
 } from "../storage";
-import type { ProjectStatus, UserProgress } from "../storage";
+import { notifyLeaderboardUpdated } from "../leaderboardEvents";
+import type { UserProgress } from "../storage";
 import Roadmap from "./Roadmap";
 import Projects from "./Projects";
 import GroupProgress from "./GroupProgress";
@@ -72,6 +76,7 @@ export default function Dashboard({
     error: string | null;
   }>({ userId: "", attempt: -1, error: null });
   const [saveError, setSaveError] = useState("");
+  const [pointsToast, setPointsToast] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [countdown, setCountdown] = useState<Countdown>(getCountdown);
   const saveQueue = useRef(Promise.resolve());
@@ -108,13 +113,24 @@ export default function Dashboard({
     return () => window.clearInterval(timer);
   }, []);
 
-  function update(next: UserProgress) {
+  useEffect(() => {
+    if (!pointsToast) return;
+    const timer = window.setTimeout(() => setPointsToast(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [pointsToast]);
+
+  function update(next: UserProgress, pointsDelta: number) {
     setProgress(next);
     setSaveError("");
+    setPointsToast("");
     saveQueue.current = saveQueue.current
       .then(async () => {
         const warning = await saveProgress(user, next);
+        notifyLeaderboardUpdated();
         if (warning) setSaveError(warning);
+        setPointsToast(
+          pointsDelta > 0 ? "+10 points earned!" : "10 points removed.",
+        );
       })
       .catch((error: unknown) => {
         setSaveError(getErrorMessage(error, "Unable to save progress."));
@@ -123,23 +139,32 @@ export default function Dashboard({
 
   function toggleTopic(topicId: string) {
     const done = progress.completedTopics.includes(topicId);
-    update({
-      ...progress,
-      completedTopics: done
-        ? progress.completedTopics.filter((id) => id !== topicId)
-        : [...progress.completedTopics, topicId],
-    });
-  }
-
-  function setProjectStatus(projectId: string, status: ProjectStatus) {
-    update({
-      ...progress,
-      projects: { ...progress.projects, [projectId]: status },
-    });
+    update(
+      {
+        ...progress,
+        completedTopics: done
+          ? progress.completedTopics.filter((id) => id !== topicId)
+          : [...progress.completedTopics, topicId],
+      },
+      done ? -10 : 10,
+    );
   }
 
   return (
     <div className="app-shell">
+      {pointsToast && (
+        <Portal>
+          <Notification
+            className="points-toast"
+            color={pointsToast.startsWith("+") ? "teal" : "orange"}
+            icon={<IconCircleCheck size={18} />}
+            title="Points updated"
+            onClose={() => setPointsToast("")}
+          >
+            {pointsToast}
+          </Notification>
+        </Portal>
+      )}
       <header className="app-topbar">
         <Container fluid className="topbar-inner">
           <Group gap="sm">
@@ -262,12 +287,7 @@ export default function Dashboard({
                     onToggle={toggleTopic}
                   />
                 )}
-                {tab === "Projects" && (
-                  <Projects
-                    statuses={progress.projects}
-                    onChange={setProjectStatus}
-                  />
-                )}
+                {tab === "Projects" && <Projects user={user} />}
               </section>
 
               <aside className="dashboard-sidebar">

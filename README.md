@@ -33,11 +33,14 @@ See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rule
 
 ## Supabase setup
 
-The app uses Supabase Auth and the `user_progress` table for accounts and personal progress. The `user_progress` table must have row-level security policies that restrict reads and writes to `auth.uid() = user_id`.
+The app uses Supabase Auth and the `user_progress` table for accounts and personal progress. Writes to `user_progress` must be restricted to `auth.uid() = user_id`. Run [`supabase-group-profiles.sql`](supabase-group-profiles.sql) to let authenticated users read completed-topic IDs for read-only group profiles.
 
-Run [`supabase-leaderboard.sql`](supabase-leaderboard.sql) and [`supabase-topic-resources.sql`](supabase-topic-resources.sql) in the Supabase SQL Editor. The second script creates the shared topic resource table: authenticated users can read all topic links and add links under their own user ID.
+Run [`supabase-leaderboard.sql`](supabase-leaderboard.sql), [`supabase-topic-resources.sql`](supabase-topic-resources.sql), and [`supabase-user-projects.sql`](supabase-user-projects.sql) in the Supabase SQL Editor. Topic resources and user projects are shared with authenticated users; owners can edit or delete only their own entries.
+Run [`supabase-leaderboard.sql`](supabase-leaderboard.sql), [`supabase-topic-resources.sql`](supabase-topic-resources.sql), [`supabase-user-projects.sql`](supabase-user-projects.sql), [`supabase-points.sql`](supabase-points.sql), and [`supabase-group-profiles.sql`](supabase-group-profiles.sql) in this order in the Supabase SQL Editor. The group-profile policy exposes completed-topic IDs to signed-in learners; personal account data and write access remain restricted. Topic resources and user projects are shared with authenticated users; owners can edit or delete only their own entries. The points script installs scoring triggers and backfills existing activity totals.
 
-If the topic resources table already exists, run the updated [`supabase-topic-resources.sql`](supabase-topic-resources.sql) again to add and backfill the resource author's display name. The script is safe to rerun.
+Points are awarded as follows: completing a topic adds 10, adding a resource adds 20, and adding a project adds 100. Unchecking a topic or deleting a resource/project reverses those points; editing a resource or project does not award points again.
+
+If the topic resources table already exists, run the updated [`supabase-topic-resources.sql`](supabase-topic-resources.sql) again to add/backfill author names and enable owner-only edit/delete policies. The script is safe to rerun.
 
 Copy `.env.example` to `.env.local` and fill in the Supabase project URL and publishable key. `.env.local` is ignored by Git. Add the same variables in Vercel under **Settings > Environment Variables**, then redeploy:
 

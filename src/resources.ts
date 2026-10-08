@@ -29,6 +29,15 @@ export interface NewTopicResource {
   displayName: string;
 }
 
+export interface TopicResourceChanges {
+  title: string;
+  url: string;
+  resourceType: ResourceType;
+  description: string;
+}
+
+export type TopicResourceCounts = Record<string, number>;
+
 function getClient() {
   if (!supabase) throw new Error("Supabase is not configured.");
   return supabase;
@@ -47,6 +56,19 @@ export async function loadTopicResources(
 
   if (error) throw error;
   return data ?? [];
+}
+
+export async function loadTopicResourceCounts(): Promise<TopicResourceCounts> {
+  const { data, error } = await getClient()
+    .from("topic_resources")
+    .select("topic_id");
+
+  if (error) throw error;
+
+  return (data ?? []).reduce<TopicResourceCounts>((counts, resource) => {
+    counts[resource.topic_id] = (counts[resource.topic_id] ?? 0) + 1;
+    return counts;
+  }, {});
 }
 
 export async function addTopicResource(
@@ -70,4 +92,43 @@ export async function addTopicResource(
 
   if (error) throw error;
   return data;
+}
+
+export async function updateTopicResource(
+  resourceId: string,
+  changes: TopicResourceChanges,
+): Promise<TopicResource> {
+  const { data, error } = await getClient()
+    .from("topic_resources")
+    .update({
+      title: changes.title.trim(),
+      url: changes.url.trim(),
+      resource_type: changes.resourceType,
+      description: changes.description.trim() || null,
+    })
+    .eq("id", resourceId)
+    .select(
+      "id, topic_id, title, url, resource_type, description, added_by, added_by_name, created_at",
+    )
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw new Error(
+      "No resource was updated. Make sure you are signed in as its author and run the latest supabase-topic-resources.sql migration to enable owner-only updates.",
+    );
+  }
+  return data;
+}
+
+export async function deleteTopicResource(resourceId: string): Promise<void> {
+  const { data, error } = await getClient()
+    .from("topic_resources")
+    .delete()
+    .eq("id", resourceId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error("You can only remove resources you added.");
 }

@@ -30,7 +30,7 @@ create index if not exists topic_resources_topic_created_idx
 
 alter table public.topic_resources enable row level security;
 
-grant select, insert on public.topic_resources to authenticated;
+grant select, insert, update, delete on public.topic_resources to authenticated;
 
 drop policy if exists "Authenticated users can view topic resources"
   on public.topic_resources;
@@ -43,3 +43,16 @@ drop policy if exists "Users can add own topic resources"
 create policy "Users can add own topic resources"
 on public.topic_resources for insert to authenticated
 with check ((select auth.uid()) = added_by);
+
+drop policy if exists "Users can update own topic resources"
+  on public.topic_resources;
+create policy "Users can update own topic resources"
+on public.topic_resources for update to authenticated
+using ((select auth.uid()) = added_by)
+with check ((select auth.uid()) = added_by);
+
+drop policy if exists "Users can delete own topic resources"
+  on public.topic_resources;
+create policy "Users can delete own topic resources"
+on public.topic_resources for delete to authenticated
+using ((select auth.uid()) = added_by);
