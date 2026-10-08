@@ -12,6 +12,7 @@ import {
   Portal,
   Select,
   Stack,
+  ThemeIcon,
   Text,
   TextInput,
   Textarea,
@@ -19,6 +20,7 @@ import {
 } from "@mantine/core";
 import {
   IconAlertCircle,
+  IconBook2,
   IconCircleCheck,
   IconExternalLink,
   IconFolder,
@@ -139,6 +141,13 @@ export default function TopicResources({
     setUrl("");
     setResourceType("video");
     setDescription("");
+  }
+
+  function beginAddingResource() {
+    resetForm();
+    setError("");
+    setSuccessMessage("");
+    setShowForm(true);
   }
 
   function beginEditing(resource: TopicResource) {
@@ -281,12 +290,7 @@ export default function TopicResources({
                 <Button
                   size="xs"
                   leftSection={<IconPlus size={15} />}
-                  onClick={() => {
-                    setError("");
-                    setSuccessMessage("");
-                    setEditingResource(null);
-                    setShowForm(true);
-                  }}
+                  onClick={beginAddingResource}
                 >
                   Add Resource
                 </Button>
@@ -378,9 +382,27 @@ export default function TopicResources({
                 <Loader size="sm" color="teal" />
               </Group>
             ) : resources.length === 0 ? (
-              <Text className="resource-empty-state" c="dimmed" size="sm">
-                No shared resources for this topic yet.
-              </Text>
+              <Stack className="resource-empty-state" align="center" gap="sm">
+                <ThemeIcon size={44} radius="xl" color="teal" variant="light">
+                  <IconBook2 size={22} />
+                </ThemeIcon>
+                <Text fw={700}>Share something that helped you learn</Text>
+                <Text size="sm" c="dimmed" maw={360}>
+                  Share a useful video, guide, or article to help the next
+                  learner and earn{" "}
+                  <Text span fw={700} c="teal">
+                    20 points
+                  </Text>
+                  .
+                </Text>
+                <Button
+                  size="sm"
+                  leftSection={<IconPlus size={16} />}
+                  onClick={beginAddingResource}
+                >
+                  Share first resource
+                </Button>
+              </Stack>
             ) : (
               <Stack gap={0} className="resource-list">
                 {resources.map((resource) => (
