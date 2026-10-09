@@ -11,6 +11,9 @@ create table if not exists public.user_projects (
   updated_at timestamptz not null default now()
 );
 
+alter table public.user_projects
+  add column if not exists roadmap_item_id text;
+
 create index if not exists user_projects_module_created_idx
   on public.user_projects (module_id, created_at desc);
 

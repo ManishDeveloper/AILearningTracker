@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { Alert, Badge, Group, Stack, Text, Title } from "@mantine/core";
-import { IconAlertCircle, IconTrophy, IconUsers } from "@tabler/icons-react";
+import {
+  IconAlertCircle,
+  IconBook2,
+  IconFolder,
+  IconRocket,
+  IconTrophy,
+  IconUsers,
+} from "@tabler/icons-react";
 import { completedTopicCount, topicPercent } from "../progress";
 import { LEADERBOARD_UPDATED_EVENT } from "../leaderboardEvents";
 import { getErrorMessage, loadLeaderboard } from "../storage";
@@ -12,6 +19,43 @@ import PointsGuide from "./PointsGuide";
 
 function firstName(displayName: string): string {
   return displayName.trim().split(/\s+/)[0] || displayName;
+}
+
+function CountMetrics({
+  topics,
+  projects,
+  resources,
+}: {
+  topics: number;
+  projects: number;
+  resources: number;
+}) {
+  const resourceCount = resources ?? 0;
+
+  return (
+    <div
+      className="group-count-metrics"
+      aria-label={`${topics} Topics, ${projects} Projects, ${resourceCount} Resources`}
+    >
+      <span className="group-count-primary">
+        <span className="group-count-metric group-count-topics">
+          <IconBook2 size={13} aria-hidden="true" />
+          <strong>{topics}</strong>
+          <span>Topics</span>
+        </span>
+        <span className="group-count-metric group-count-projects">
+          <IconRocket size={13} aria-hidden="true" />
+          <strong>{projects}</strong>
+          <span>Projects</span>
+        </span>
+        <span className="group-count-metric group-count-resources">
+          <IconFolder size={13} aria-hidden="true" />
+          <strong>{resourceCount}</strong>
+          <span>Resources</span>
+        </span>
+      </span>
+    </div>
+  );
 }
 
 export default function GroupProgress({
@@ -69,6 +113,8 @@ export default function GroupProgress({
     completed_topics: completedTopicCount(progress),
     projects_count:
       rows.find((row) => row.user_id === currentUser)?.projects_count ?? 0,
+    resources_count:
+      rows.find((row) => row.user_id === currentUser)?.resources_count ?? 0,
     points_total:
       rows.find((row) => row.user_id === currentUser)?.points_total ??
       completedTopicCount(progress) * 10,
@@ -132,10 +178,6 @@ export default function GroupProgress({
                 </span>
               )}
             </Group>
-            <Text size="xs" c="dimmed">
-              {currentEntry.completed_topics} topics ·{" "}
-              {currentEntry.projects_count} projects
-            </Text>
           </div>
           <div className="group-current-score">
             <Text size="xs" c="dimmed">
@@ -148,6 +190,13 @@ export default function GroupProgress({
               <PointsGuide />
             </Group>
           </div>
+        </div>
+        <div className="group-current-counts">
+          <CountMetrics
+            topics={currentEntry.completed_topics}
+            projects={currentEntry.projects_count}
+            resources={currentEntry.resources_count}
+          />
         </div>
         <div className="group-current-progress-bar">
           <ProgressBar percent={currentEntry.progress_percent} small />
@@ -207,10 +256,6 @@ export default function GroupProgress({
                       </span>
                     )}
                   </Group>
-                  <Text size="xs" c="dimmed">
-                    {row.completed_topics} topics · {row.projects_count}{" "}
-                    projects
-                  </Text>
                 </div>
               </Group>
               <div className="group-score">
@@ -221,6 +266,13 @@ export default function GroupProgress({
                   {row.points_total} pts
                 </Badge>
               </div>
+            </div>
+            <div className="group-entry-counts">
+              <CountMetrics
+                topics={row.completed_topics}
+                projects={row.projects_count}
+                resources={row.resources_count}
+              />
             </div>
             <div className="group-entry-progress">
               <ProgressBar percent={row.progress_percent} small />

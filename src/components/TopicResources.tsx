@@ -258,16 +258,18 @@ export default function TopicResources({
         </Portal>
       )}
 
-      <Button
-        className="topic-resource-button"
-        variant="default"
-        size="xs"
-        leftSection={<IconFolder size={14} stroke={1.8} />}
-        aria-label={`Resources for ${topicTitle}: ${resourceCount} resources`}
-        onClick={() => setOpened(true)}
-      >
-        Resources ({resourceCount})
-      </Button>
+      <Tooltip label={`Resources for ${topicTitle}`}>
+        <Button
+          className="topic-resource-button"
+          variant="default"
+          size="xs"
+          leftSection={<IconFolder size={15} stroke={1.8} />}
+          aria-label={`Resources for ${topicTitle}: ${resourceCount} resources`}
+          onClick={() => setOpened(true)}
+        >
+          {resourceCount}
+        </Button>
+      </Tooltip>
 
       <Modal
         opened={modalOpened}
@@ -391,7 +393,7 @@ export default function TopicResources({
                   Share a useful video, guide, or article to help the next
                   learner and earn{" "}
                   <Text span fw={700} c="teal">
-                    20 points
+                    50 points
                   </Text>
                   .
                 </Text>

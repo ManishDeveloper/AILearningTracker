@@ -28,6 +28,7 @@ export interface LeaderboardEntry {
   points_total: number;
   completed_topics: number;
   projects_count: number;
+  resources_count: number;
 }
 
 function getClient() {
@@ -146,17 +147,20 @@ export async function saveProgress(
 
 export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
   const client = getClient();
-  const [leaderboardResult, pointsResult, projectsResult] = await Promise.all([
-    client
-      .from("user_leaderboard")
-      .select("user_id, display_name, progress_percent, completed_topics"),
-    client.from("user_points").select("user_id, display_name, points_total"),
-    client.from("user_projects").select("user_id"),
-  ]);
+  const [leaderboardResult, pointsResult, projectsResult, resourcesResult] =
+    await Promise.all([
+      client
+        .from("user_leaderboard")
+        .select("user_id, display_name, progress_percent, completed_topics"),
+      client.from("user_points").select("user_id, display_name, points_total"),
+      client.from("user_projects").select("user_id"),
+      client.from("topic_resources").select("added_by"),
+    ]);
 
   if (leaderboardResult.error) throw leaderboardResult.error;
   if (pointsResult.error) throw pointsResult.error;
   if (projectsResult.error) throw projectsResult.error;
+  if (resourcesResult.error) throw resourcesResult.error;
 
   const progressByUser = new Map(
     (leaderboardResult.data ?? []).map((entry) => [entry.user_id, entry]),
@@ -168,6 +172,13 @@ export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
       (projectCounts.get(project.user_id) ?? 0) + 1,
     );
   }
+  const resourceCounts = new Map<string, number>();
+  for (const resource of resourcesResult.data ?? []) {
+    resourceCounts.set(
+      resource.added_by,
+      (resourceCounts.get(resource.added_by) ?? 0) + 1,
+    );
+  }
 
   return (pointsResult.data ?? []).map((score) => ({
     user_id: score.user_id,
@@ -177,5 +188,6 @@ export async function loadLeaderboard(): Promise<LeaderboardEntry[]> {
     points_total: score.points_total,
     completed_topics: progressByUser.get(score.user_id)?.completed_topics ?? 0,
     projects_count: projectCounts.get(score.user_id) ?? 0,
+    resources_count: resourceCounts.get(score.user_id) ?? 0,
   }));
 }

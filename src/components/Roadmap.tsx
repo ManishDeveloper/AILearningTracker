@@ -1,4 +1,4 @@
-import { ROADMAP } from "../data/roadmap";
+import { ROADMAP, type RoadmapItemType } from "../data/roadmap.ts";
 import { useEffect, useRef, useState } from "react";
 import {
   Accordion,
@@ -11,24 +11,36 @@ import {
   SegmentedControl,
   Stack,
   Text,
+  TextInput,
+  Textarea,
   ThemeIcon,
 } from "@mantine/core";
 import {
   IconBook2,
   IconBrain,
   IconCode,
+  IconPlayerPlay,
+  IconCheck,
   IconRefresh,
   IconRobot,
+  IconRocket,
   IconSparkles,
+  IconTrophy,
 } from "@tabler/icons-react";
 import ProgressBar from "./ProgressBar";
 import TopicResources from "./TopicResources";
 import type { User } from "../data/users";
 import type { TopicDetail } from "../storage";
+import { getErrorMessage } from "../storage";
 import { topicCountdown } from "../progress";
 import { loadTopicResourceCounts } from "../resources";
 import type { TopicResourceCounts } from "../resources";
-
+import {
+  addUserProject,
+  loadUserProjects,
+  updateUserProject,
+} from "../projects";
+import type { ProjectInput, UserProject } from "../projects";
 const MODULE_ICONS = [
   IconCode,
   IconBook2,
@@ -42,6 +54,8 @@ function TopicRow({
   topicId,
   topicTitle,
   topicPoints,
+  topicType,
+  stepNumber,
   user,
   detail,
   activeTopicId,
@@ -54,6 +68,8 @@ function TopicRow({
   topicId: string;
   topicTitle: string;
   topicPoints: number;
+  topicType: RoadmapItemType;
+  stepNumber: number;
   user: User;
   detail: TopicDetail;
   activeTopicId: string | null;
@@ -67,33 +83,66 @@ function TopicRow({
   const isBlocked = activeTopicId !== null && !isActive;
 
   return (
-    <div className="roadmap-topic-row">
-      <Group gap="xs" wrap="wrap">
-        <Text className="roadmap-topic-title" size="sm">
-          {topicTitle}
-        </Text>
-        <Badge color="teal" variant="light" size="sm">
-          {topicPoints} pts
-        </Badge>
-      </Group>
+    <div className={`roadmap-topic-row${isActive ? " is-active" : ""}`}>
+      <div
+        className={`roadmap-step-marker${
+          topicType === "project" ? " is-project" : ""
+        }${detail.status === "complete" ? " is-complete" : ""}`}
+        aria-hidden="true"
+      >
+        {detail.status === "complete" ? (
+          <IconCheck size={15} stroke={2.5} />
+        ) : topicType === "project" ? (
+          <IconRocket size={15} stroke={2} />
+        ) : (
+          String(stepNumber).padStart(2, "0")
+        )}
+      </div>
+      <div className="roadmap-topic-content">
+        <Group className="roadmap-topic-heading" gap="xs" wrap="wrap">
+          <Text className="roadmap-topic-title" size="sm">
+            {topicTitle}
+          </Text>
+          {topicType === "project" && (
+            <Badge color="orange" variant="light" size="sm">
+              Project
+            </Badge>
+          )}
+          <Group
+            className="roadmap-topic-points"
+            gap={4}
+            wrap="nowrap"
+            aria-label={`${topicPoints} points`}
+          >
+            <IconTrophy size={16} stroke={2.5} aria-hidden="true" />
+            <Text size="xs" fw={700}>
+              {topicPoints} pts
+            </Text>
+          </Group>
+        </Group>
+      </div>
       <Group className="roadmap-topic-controls" gap="xs" wrap="nowrap">
         {detail.status === "complete" ? (
           <>
             <Badge color="teal" variant="light">
               Complete
             </Badge>
-            <Button
-              size="xs"
-              variant="light"
-              color="blue"
-              disabled={isBlocked}
-              title={
-                isBlocked ? `Complete ${activeTopicTitle} first` : undefined
-              }
-              onClick={() => onRequestStart(topicId)}
-            >
-              Restart
-            </Button>
+            {topicType !== "project" && (
+              <Button
+                className="roadmap-restart-button"
+                size="xs"
+                variant="light"
+                color="blue"
+                leftSection={<IconRefresh size={14} />}
+                disabled={isBlocked}
+                title={
+                  isBlocked ? `Complete ${activeTopicTitle} first` : undefined
+                }
+                onClick={() => onRequestStart(topicId)}
+              >
+                Restart
+              </Button>
+            )}
           </>
         ) : isActive ? (
           <Badge color="orange" variant="light">
@@ -101,8 +150,11 @@ function TopicRow({
           </Badge>
         ) : (
           <Button
+            className="roadmap-start-button"
             size="xs"
-            variant="light"
+            variant="filled"
+            color="teal"
+            leftSection={<IconPlayerPlay size={14} />}
             disabled={isBlocked}
             title={isBlocked ? `Complete ${activeTopicTitle} first` : undefined}
             onClick={() => onRequestStart(topicId)}
@@ -139,12 +191,20 @@ export default function Roadmap({
   onComplete,
 }: Props) {
   const [resourceCounts, setResourceCounts] = useState<TopicResourceCounts>({});
+  const [userProjects, setUserProjects] = useState<UserProject[] | null>(null);
+  const [projectLoadFailed, setProjectLoadFailed] = useState(false);
   const pendingCountChanges = useRef<TopicResourceCounts>({});
   const countsLoaded = useRef(false);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [durationValue, setDurationValue] = useState<number | string>(1);
   const [durationUnit, setDurationUnit] = useState<"hours" | "days">("days");
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [completionError, setCompletionError] = useState("");
+  const [completing, setCompleting] = useState(false);
+  const [projectGithubUrl, setProjectGithubUrl] = useState("");
+  const [projectLiveUrl, setProjectLiveUrl] = useState("");
+  const [projectDescription, setProjectDescription] = useState("");
+  const completionInFlight = useRef(false);
   const [resourceOpenRequest, setResourceOpenRequest] = useState({
     topicId: "",
     requestId: 0,
@@ -153,6 +213,15 @@ export default function Roadmap({
   const activeTopic = ROADMAP.flatMap((module) => module.topics).find(
     (topic) => topicDetails[topic.id]?.status === "in_progress",
   );
+  const activeTopicModule = ROADMAP.find((module) =>
+    module.topics.some((topic) => topic.id === activeTopic?.id),
+  );
+  const existingRoadmapProject = activeTopic
+    ? userProjects?.find(
+        (project) => project.roadmap_item_id === activeTopic.id,
+      )
+    : undefined;
+  const hasRoadmapProject = Boolean(existingRoadmapProject);
   const activeTopicDetail = activeTopic
     ? topicDetails[activeTopic.id]
     : undefined;
@@ -200,11 +269,122 @@ export default function Roadmap({
     }));
   }
 
-  function confirmComplete() {
-    if (!activeTopic) return;
-    onComplete(activeTopic.id);
-    setCompletionDialogOpen(false);
+  function openCompletionDialog() {
+    setCompletionError("");
+    if (activeTopic?.type === "project") {
+      const existingProject = userProjects?.find(
+        (project) => project.roadmap_item_id === activeTopic.id,
+      );
+      setProjectGithubUrl(existingProject?.github_url ?? "");
+      setProjectLiveUrl(existingProject?.live_url ?? "");
+      setProjectDescription(existingProject?.description ?? "");
+    }
+    setCompletionDialogOpen(true);
   }
+
+  async function confirmComplete(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeTopic || completionInFlight.current) return;
+    if (
+      activeTopic.type === "project" &&
+      (userProjects === null || projectLoadFailed || !activeTopicModule)
+    ) {
+      return;
+    }
+
+    completionInFlight.current = true;
+    setCompleting(true);
+    setCompletionError("");
+    try {
+      if (activeTopic.type === "project") {
+        if (!projectGithubUrl.trim()) {
+          setCompletionError(
+            "Add a GitHub link before completing this project.",
+          );
+          return;
+        }
+
+        let normalizedGithubUrl: string;
+        let normalizedLiveUrl: string | null;
+        try {
+          const githubUrl = new URL(projectGithubUrl.trim());
+          if (
+            githubUrl.protocol !== "http:" &&
+            githubUrl.protocol !== "https:"
+          ) {
+            throw new Error();
+          }
+          normalizedGithubUrl = githubUrl.toString();
+
+          if (projectLiveUrl.trim()) {
+            const liveUrl = new URL(projectLiveUrl.trim());
+            if (liveUrl.protocol !== "http:" && liveUrl.protocol !== "https:") {
+              throw new Error();
+            }
+            normalizedLiveUrl = liveUrl.toString();
+          } else {
+            normalizedLiveUrl = null;
+          }
+        } catch {
+          setCompletionError("Enter valid http:// or https:// project links.");
+          return;
+        }
+
+        const projectInput: ProjectInput = {
+          moduleId: activeTopicModule!.id,
+          roadmapItemId: activeTopic.id,
+          title: activeTopic.title,
+          liveUrl: normalizedLiveUrl ?? "",
+          githubUrl: normalizedGithubUrl,
+          description: projectDescription,
+          userId: user.id,
+          displayName: user.displayName,
+        };
+        const project = existingRoadmapProject
+          ? await updateUserProject(existingRoadmapProject.id, projectInput)
+          : await addUserProject(projectInput);
+        setUserProjects((current) => {
+          if (!current) return [project];
+          if (existingRoadmapProject) {
+            return current.map((item) =>
+              item.id === project.id ? project : item,
+            );
+          }
+          return [project, ...current];
+        });
+      }
+      onComplete(activeTopic.id);
+      setCompletionDialogOpen(false);
+    } catch (error: unknown) {
+      setCompletionError(
+        getErrorMessage(error, "Unable to save this roadmap project."),
+      );
+    } finally {
+      completionInFlight.current = false;
+      setCompleting(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    setUserProjects(null);
+    setProjectLoadFailed(false);
+
+    loadUserProjects(user.id)
+      .then((projects) => {
+        if (active) setUserProjects(projects);
+      })
+      .catch(() => {
+        if (active) {
+          setUserProjects([]);
+          setProjectLoadFailed(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user.id]);
 
   useEffect(() => {
     let active = true;
@@ -246,10 +426,23 @@ export default function Roadmap({
         <Alert className="topic-active-alert" color="teal" variant="light">
           <div className="topic-active-banner">
             <div className="topic-active-copy">
-              <Text className="topic-active-title">One topic at a time</Text>
-              <Text size="sm">
-                Complete <strong>{activeTopic.title}.</strong>
-              </Text>
+              <Group gap="xs" wrap="wrap">
+                <Badge
+                  color={activeTopic.type === "project" ? "orange" : "gray"}
+                  variant="light"
+                  size="sm"
+                >
+                  {activeTopic.type === "project" ? "Project" : "Topic"}
+                </Badge>
+                <Text className="topic-active-title">
+                  One learning item at a time
+                </Text>
+              </Group>
+              <Group gap="xs" wrap="wrap">
+                <Text size="sm">
+                  Complete <strong>{activeTopic.title}.</strong>
+                </Text>
+              </Group>
             </div>
             <div className="topic-active-actions">
               {countdown && (
@@ -272,11 +465,7 @@ export default function Roadmap({
                   {countdown.seconds > 0 ? `${countdown.seconds}s` : "Time up"}
                 </Text>
               )}
-              <Button
-                size="sm"
-                color="teal"
-                onClick={() => setCompletionDialogOpen(true)}
-              >
+              <Button size="sm" color="teal" onClick={openCompletionDialog}>
                 Mark complete
               </Button>
             </div>
@@ -291,19 +480,101 @@ export default function Roadmap({
         size="sm"
       >
         {activeTopic && (
-          <Stack gap="md">
-            <Text>
-              Nice work studying <strong>{activeTopic.title}</strong>. Share a
-              helpful resource with your friends and earn 20 points, or complete
-              this topic for {activeTopic.points} points.
-            </Text>
-            <Button variant="light" onClick={openActiveTopicResources}>
-              Add Resource (+20 points)
-            </Button>
-            <Button color="teal" onClick={confirmComplete}>
-              Mark Complete (+{activeTopic.points} points)
-            </Button>
-          </Stack>
+          <form
+            onSubmit={(event) => void confirmComplete(event)}
+            noValidate={false}
+          >
+            <Stack gap="md">
+              <Text>
+                {activeTopic.type === "project"
+                  ? "Nice work on"
+                  : "Nice work studying"}{" "}
+                <strong>{activeTopic.title}</strong>. Share a helpful resource
+                with your friends and earn 50 points, or complete this item for{" "}
+                {activeTopic.points} points.
+              </Text>
+              <Button
+                type="button"
+                variant="light"
+                onClick={openActiveTopicResources}
+              >
+                Add Resource (+50 points)
+              </Button>
+              {activeTopic.type === "project" && (
+                <>
+                  <Alert
+                    color={
+                      projectLoadFailed
+                        ? "red"
+                        : hasRoadmapProject
+                          ? "teal"
+                          : "orange"
+                    }
+                    variant="light"
+                  >
+                    {userProjects === null
+                      ? "Checking for a project linked to this roadmap item..."
+                      : projectLoadFailed
+                        ? "Couldn't check your Projects list. Try again later."
+                        : hasRoadmapProject
+                          ? "Update or confirm the project links below. This entry will remain in your Projects list."
+                          : "Add the project links below. It will be saved to Projects when you mark this item complete."}
+                  </Alert>
+                  <TextInput
+                    label="GitHub link"
+                    placeholder="https://github.com/you/project"
+                    type="url"
+                    value={projectGithubUrl}
+                    onChange={(event) =>
+                      setProjectGithubUrl(event.currentTarget.value)
+                    }
+                    required
+                    disabled={completing}
+                  />
+                  <TextInput
+                    label="Live project link (optional)"
+                    placeholder="https://your-project.example"
+                    type="url"
+                    value={projectLiveUrl}
+                    onChange={(event) =>
+                      setProjectLiveUrl(event.currentTarget.value)
+                    }
+                    disabled={completing}
+                  />
+                  <Textarea
+                    label="Description (optional)"
+                    placeholder="What does your project do?"
+                    value={projectDescription}
+                    onChange={(event) =>
+                      setProjectDescription(event.currentTarget.value)
+                    }
+                    maxLength={1000}
+                    autosize
+                    minRows={2}
+                    maxRows={5}
+                    disabled={completing}
+                  />
+                  {completionError && (
+                    <Alert color="red" variant="light">
+                      {completionError}
+                    </Alert>
+                  )}
+                </>
+              )}
+              <Button
+                color="teal"
+                type="submit"
+                loading={completing}
+                disabled={
+                  completing ||
+                  (activeTopic.type === "project" &&
+                    (userProjects === null || projectLoadFailed))
+                }
+              >
+                Mark Complete (+{activeTopic.points} points)
+              </Button>
+            </Stack>
+          </form>
         )}
       </Modal>
       <Modal
@@ -344,7 +615,11 @@ export default function Roadmap({
                 Cancel
               </Button>
               <Button onClick={confirmStart}>
-                {selectedTopicIsComplete ? "Restart topic" : "Start topic"}
+                {selectedTopic.type === "project"
+                  ? "Start Project"
+                  : selectedTopicIsComplete
+                    ? "Restart Topic"
+                    : "Start Topic"}
               </Button>
             </Group>
           </Stack>
@@ -398,7 +673,7 @@ export default function Roadmap({
                   small
                 />
                 <Stack gap={0} className="topic-list">
-                  {mod.topics.map((t) => {
+                  {mod.topics.map((t, topicIndex) => {
                     const detail = topicDetails[t.id] ?? {
                       status: completedTopics.includes(t.id)
                         ? "complete"
@@ -412,6 +687,8 @@ export default function Roadmap({
                         topicId={t.id}
                         topicTitle={t.title}
                         topicPoints={t.points}
+                        topicType={t.type}
+                        stepNumber={topicIndex + 1}
                         user={user}
                         detail={detail}
                         activeTopicId={activeTopic?.id ?? null}

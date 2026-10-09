@@ -44,7 +44,7 @@ export default function PointsGuide() {
           <Group justify="space-between" gap="lg" wrap="nowrap">
             <Text size="xs">Add a learning resource</Text>
             <Badge color="teal" variant="light">
-              +20
+              +50
             </Badge>
           </Group>
           <Group justify="space-between" gap="lg" wrap="nowrap">

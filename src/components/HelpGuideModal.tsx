@@ -1,25 +1,31 @@
-import { Modal, Stack, Text } from "@mantine/core";
+import { Group, Modal, Text } from "@mantine/core";
+import {
+  IconBook2,
+  IconCode,
+  IconRocket,
+  IconTrophy,
+} from "@tabler/icons-react";
 
-const GUIDE_SECTIONS = [
+const LEARNING_STEPS = [
   {
-    title: "Follow your roadmap",
-    body: "Open a module and start a topic. Work on one topic at a time, set a time estimate, then mark it complete to record your progress.",
+    title: "Learn",
+    caption: "Start one topic",
+    Icon: IconBook2,
   },
   {
-    title: "Earn points",
-    body: "Each topic has its own point value, shown beside its title. Adding a learning resource earns 20 points; adding a project earns 100 points.",
+    title: "Build",
+    caption: "Practice as you go",
+    Icon: IconCode,
   },
   {
-    title: "Share what you learn",
-    body: "Use a topic's Resources button to share a helpful link. Add projects from the Projects tab so your cohort can see what you built.",
+    title: "Ship",
+    caption: "Submit your project",
+    Icon: IconRocket,
   },
   {
-    title: "Explore cohort activity",
-    body: "Filter the Activity feed by learning, projects, resources, or learner. Use Clap to react to someone's update.",
-  },
-  {
-    title: "Manage your target and progress",
-    body: "The header shows the cohort target date and time remaining. Reset roadmap progress in Profile settings if you want to clear topic statuses and timers; this also removes earned topic points, but keeps projects and resources.",
+    title: "Earn",
+    caption: "150–300 points",
+    Icon: IconTrophy,
   },
 ];
 
@@ -34,22 +40,45 @@ export default function HelpGuideModal({
     <Modal
       opened={opened}
       onClose={onClose}
-      title="How the tracker works"
+      title="How the AI tracker works"
       centered
-      size="md"
+      size="xl"
     >
-      <Stack gap="md">
-        {GUIDE_SECTIONS.map((section) => (
-          <section key={section.title}>
-            <Text size="sm" fw={700}>
-              {section.title}
-            </Text>
-            <Text size="sm" c="dimmed" mt={3}>
-              {section.body}
-            </Text>
-          </section>
-        ))}
-      </Stack>
+      <div className="learning-flow">
+        <div className="learning-flow-steps">
+          {LEARNING_STEPS.map(({ title, caption, Icon }, index) => (
+            <section
+              className={`learning-flow-step learning-flow-step-${index + 1}`}
+              key={title}
+            >
+              <div className="learning-flow-marker">
+                <Icon size={29} stroke={1.8} />
+              </div>
+              <Text className="learning-flow-title" fw={700}>
+                {title}
+              </Text>
+              <Text className="learning-flow-caption" size="sm">
+                {caption}
+              </Text>
+            </section>
+          ))}
+        </div>
+        <Group className="learning-flow-rewards" gap="sm" wrap="wrap">
+          <div className="learning-flow-reward learning-flow-project-reward">
+            <IconTrophy size={18} />
+            <span>Roadmap project</span>
+            <strong>150–300 pts</strong>
+          </div>
+          <div className="learning-flow-reward learning-flow-resource-reward">
+            <IconBook2 size={18} />
+            <span>Share a resource</span>
+            <strong>+50 pts</strong>
+          </div>
+        </Group>
+        <Text className="learning-flow-note" size="xs">
+          Roadmap projects need a GitHub link. Personal projects stay separate.
+        </Text>
+      </div>
     </Modal>
   );
 }

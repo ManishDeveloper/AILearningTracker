@@ -5,6 +5,7 @@ export interface UserProject {
   user_id: string;
   display_name: string;
   module_id: string;
+  roadmap_item_id: string | null;
   title: string;
   live_url: string | null;
   github_url: string | null;
@@ -15,6 +16,7 @@ export interface UserProject {
 
 export interface ProjectInput {
   moduleId: string;
+  roadmapItemId: string | null;
   title: string;
   liveUrl: string;
   githubUrl: string;
@@ -24,7 +26,7 @@ export interface ProjectInput {
 }
 
 const PROJECT_COLUMNS =
-  "id, user_id, display_name, module_id, title, live_url, github_url, description, created_at, updated_at";
+  "id, user_id, display_name, module_id, roadmap_item_id, title, live_url, github_url, description, created_at, updated_at";
 
 function getClient() {
   if (!supabase) throw new Error("Supabase is not configured.");
@@ -34,6 +36,7 @@ function getClient() {
 function projectValues(project: ProjectInput) {
   return {
     module_id: project.moduleId,
+    roadmap_item_id: project.roadmapItemId,
     title: project.title.trim(),
     live_url: project.liveUrl.trim() || null,
     github_url: project.githubUrl.trim() || null,

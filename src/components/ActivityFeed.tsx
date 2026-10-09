@@ -263,6 +263,7 @@ export default function ActivityFeed({
         points_total: 0,
         completed_topics: 0,
         projects_count: 0,
+        resources_count: 0,
       };
       setSelectedProfile({
         learner,

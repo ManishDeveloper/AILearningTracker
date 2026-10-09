@@ -16,20 +16,16 @@ import {
 import {
   IconAlertCircle,
   IconBrandGithub,
+  IconCheck,
   IconExternalLink,
+  IconRocket,
   IconTrophy,
 } from "@tabler/icons-react";
-import { ROADMAP } from "../data/roadmap";
+import { ROADMAP } from "../data/roadmap.ts";
 import { loadUserProjects } from "../projects";
 import type { UserProject } from "../projects";
 import { getErrorMessage, loadUserProgress } from "../storage";
 import type { LeaderboardEntry, UserProgress } from "../storage";
-import {
-  completedTopicCount,
-  formatTopicDuration,
-  formatTopicTimeRemaining,
-  topicCountdown,
-} from "../progress";
 import ProgressBar from "./ProgressBar";
 import RankConfetti from "./RankConfetti";
 import PointsGuide from "./PointsGuide";
@@ -46,7 +42,6 @@ function LearnerRoadmap({ progress }: { progress: UserProgress }) {
         <Title order={3}>Roadmap</Title>
         <Text size="sm" c="dimmed">
           {progress.completedTopics.length}/{totalTopics} topics complete
-          {completedTopicCount(progress)}/{totalTopics} topics complete
         </Text>
       </Group>
       <Stack gap="sm">
@@ -75,8 +70,8 @@ function LearnerRoadmap({ progress }: { progress: UserProgress }) {
                 </Badge>
               </Group>
               <ProgressBar percent={percent} small />
-              <Stack gap={0} mt="xs">
-                {module.topics.map((topic) => {
+              <Stack gap={0} mt="xs" className="learner-profile-topic-list">
+                {module.topics.map((topic, topicIndex) => {
                   const detail = progress.topicDetails[topic.id] ?? {
                     status: progress.completedTopics.includes(topic.id)
                       ? "complete"
@@ -84,23 +79,69 @@ function LearnerRoadmap({ progress }: { progress: UserProgress }) {
                     durationHours: 24,
                     startedAt: null,
                   };
-                  const timeRemaining = topicCountdown(
-                    detail.startedAt,
-                    detail.durationHours,
-                  );
+                  const isComplete =
+                    detail.status === "complete" ||
+                    progress.completedTopics.includes(topic.id);
                   return (
-                    <Group
+                    <div
                       key={topic.id}
-                      className="learner-profile-topic"
-                      justify="space-between"
-                      wrap="nowrap"
-                      gap="xs"
+                      className={`roadmap-topic-row learner-profile-topic-row${
+                        detail.status === "in_progress" ? " is-active" : ""
+                      }`}
                     >
-                      <Text size="sm">{topic.title}</Text>
-                      <Group gap="xs" wrap="nowrap">
+                      <div
+                        className={`roadmap-step-marker${
+                          topic.type === "project" ? " is-project" : ""
+                        }${isComplete ? " is-complete" : ""}`}
+                        aria-hidden="true"
+                      >
+                        {isComplete ? (
+                          <IconCheck size={15} stroke={2.5} />
+                        ) : topic.type === "project" ? (
+                          <IconRocket size={15} stroke={2} />
+                        ) : (
+                          String(topicIndex + 1).padStart(2, "0")
+                        )}
+                      </div>
+                      <div className="roadmap-topic-content">
+                        <Group
+                          className="roadmap-topic-heading"
+                          gap="xs"
+                          wrap="wrap"
+                        >
+                          <Text className="roadmap-topic-title" size="sm">
+                            {topic.title}
+                          </Text>
+                          {topic.type === "project" && (
+                            <Badge color="orange" variant="light" size="sm">
+                              Project
+                            </Badge>
+                          )}
+                          <Group
+                            className="roadmap-topic-points"
+                            gap={4}
+                            wrap="nowrap"
+                            aria-label={`${topic.points} points`}
+                          >
+                            <IconTrophy
+                              size={16}
+                              stroke={2.5}
+                              aria-hidden="true"
+                            />
+                            <Text size="xs" fw={700}>
+                              {topic.points} pts
+                            </Text>
+                          </Group>
+                        </Group>
+                      </div>
+                      <Group
+                        className="roadmap-topic-controls"
+                        gap="xs"
+                        wrap="nowrap"
+                      >
                         <Badge
                           color={
-                            detail.status === "complete"
+                            isComplete
                               ? "teal"
                               : detail.status === "in_progress"
                                 ? "orange"
@@ -114,18 +155,8 @@ function LearnerRoadmap({ progress }: { progress: UserProgress }) {
                               ? "In progress"
                               : "Complete"}
                         </Badge>
-                        <Text
-                          size="xs"
-                          c="dimmed"
-                          className="learner-topic-days"
-                        >
-                          {detail.status === "in_progress" &&
-                          timeRemaining !== null
-                            ? formatTopicTimeRemaining(timeRemaining)
-                            : formatTopicDuration(detail.durationHours)}
-                        </Text>
                       </Group>
-                    </Group>
+                    </div>
                   );
                 })}
               </Stack>
@@ -317,9 +348,14 @@ export default function LearnerProfileModal({
                       </span>
                     )}
                   </Group>
-                  <Text size="sm" c="dimmed">
-                    {learner.completed_topics} topics · {learner.projects_count}{" "}
-                    projects
+                  <Text
+                    className="group-count-summary"
+                    size="sm"
+                    fz={11}
+                    c="dimmed"
+                  >
+                    {learner.completed_topics} Topics · {learner.projects_count}{" "}
+                    Projects · {learner.resources_count} Resources
                   </Text>
                 </div>
               </Group>

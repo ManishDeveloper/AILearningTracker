@@ -94,62 +94,67 @@ immutable
 parallel safe
 as $$
   select case p_topic_id
-    when 'm1t1' then 15
+    when 'm1t1' then 10
     when 'm1t2' then 15
-    when 'm1t3' then 15
+    when 'm1t3' then 10
     when 'm1t4' then 15
-    when 'm1t5' then 20
-    when 'm1t6' then 20
-    when 'm1t7' then 25
+    when 'm1t5' then 15
+    when 'm1t6' then 15
+    when 'm1t7' then 20
+    when 'm1t8' then 20
+    when 'm1t9' then 150
     when 'm2t1' then 10
-    when 'm2t2' then 15
-    when 'm2t3' then 15
+    when 'm2t2' then 10
+    when 'm2t3' then 10
     when 'm2t4' then 15
-    when 'm2t5' then 20
+    when 'm2t5' then 15
     when 'm2t6' then 20
-    when 'm2t7' then 15
-    when 'm2t8' then 20
-    when 'm2t9' then 15
-    when 'm2t10' then 30
+    when 'm2t7' then 175
+    when 'm2t8' then 15
+    when 'm2t9' then 20
+    when 'm2t10' then 20
+    when 'm2t11' then 25
+    when 'm2t12' then 30
     when 'm3t1' then 10
-    when 'm3t2' then 15
-    when 'm3t3' then 15
-    when 'm3t4' then 20
-    when 'm3t5' then 20
+    when 'm3t2' then 25
+    when 'm3t3' then 20
+    when 'm3t4' then 30
+    when 'm3t5' then 35
     when 'm3t6' then 20
-    when 'm3t7' then 20
-    when 'm3t8' then 20
-    when 'm3t9' then 25
+    when 'm3t7' then 15
+    when 'm3t8' then 25
+    when 'm3t9' then 30
     when 'm3t10' then 30
-    when 'm4t1' then 10
-    when 'm4t2' then 25
-    when 'm4t3' then 20
+    when 'm3t11' then 35
+    when 'm3t12' then 30
+    when 'm3t13' then 35
+    when 'm3t14' then 35
+    when 'm3t15' then 40
+    when 'm3t16' then 35
+    when 'm3t17' then 35
+    when 'm3t18' then 30
+    when 'm3t19' then 30
+    when 'm3t20' then 150
+    when 'm3t21' then 250
+    when 'm4t1' then 15
+    when 'm4t2' then 20
+    when 'm4t3' then 30
     when 'm4t4' then 30
-    when 'm4t5' then 40
-    when 'm4t6' then 20
-    when 'm4t7' then 25
-    when 'm4t8' then 15
-    when 'm4t9' then 20
+    when 'm4t5' then 35
+    when 'm4t6' then 30
+    when 'm4t7' then 35
+    when 'm4t8' then 40
+    when 'm4t9' then 35
     when 'm4t10' then 30
     when 'm4t11' then 35
     when 'm4t12' then 35
     when 'm4t13' then 35
-    when 'm4t14' then 35
-    when 'm4t15' then 40
-    when 'm4t16' then 30
-    when 'm5t1' then 15
-    when 'm5t2' then 20
-    when 'm5t3' then 30
-    when 'm5t4' then 30
-    when 'm5t5' then 35
-    when 'm5t6' then 35
-    when 'm5t7' then 35
-    when 'm5t8' then 35
-    when 'm5t9' then 40
-    when 'm5t10' then 35
-    when 'm5t11' then 35
-    when 'm5t12' then 30
-    when 'm5t13' then 40
+    when 'm4t14' then 30
+    when 'm4t15' then 25
+    when 'm4t16' then 40
+    when 'm4t17' then 250
+    when 'm4t18' then 275
+    when 'm4t19' then 300
     else 0
   end;
 $$;
@@ -234,11 +239,11 @@ set search_path = public, auth
 as $$
 begin
   if tg_op = 'INSERT' then
-    perform public.apply_user_points(new.added_by, 20, new.added_by_name);
+    perform public.apply_user_points(new.added_by, 50, new.added_by_name);
     return new;
   end if;
 
-  perform public.apply_user_points(old.added_by, -20, old.added_by_name);
+  perform public.apply_user_points(old.added_by, -50, old.added_by_name);
   return old;
 end;
 $$;
@@ -295,7 +300,7 @@ with completed_topic_points as (
   ) as completed
   group by completed.user_id
 ), resource_points as (
-  select added_by as user_id, count(*)::integer * 20 as points
+  select added_by as user_id, count(*)::integer * 50 as points
   from public.topic_resources
   group by added_by
 ), project_points as (

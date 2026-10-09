@@ -32,7 +32,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import type { User } from "../data/users";
-import { ROADMAP } from "../data/roadmap";
+import { ROADMAP } from "../data/roadmap.ts";
 import {
   addUserProject,
   deleteUserProject,
@@ -45,6 +45,7 @@ import { notifyLeaderboardUpdated } from "../leaderboardEvents";
 
 interface Props {
   user: User;
+  onRoadmapProjectDeleted: (roadmapItemId: string) => Promise<boolean>;
 }
 
 function parseOptionalUrl(value: string, label: string): string | null {
@@ -64,7 +65,8 @@ function parseOptionalUrl(value: string, label: string): string | null {
   return parsedUrl.toString();
 }
 
-export default function Projects({ user }: Props) {
+export default function Projects({ user, onRoadmapProjectDeleted }: Props) {
+  const defaultModuleId = ROADMAP[0]?.id ?? "";
   const [projects, setProjects] = useState<UserProject[]>([]);
   const [projectUsers, setProjectUsers] = useState<
     { userId: string; displayName: string; label: string }[]
@@ -80,7 +82,8 @@ export default function Projects({ user }: Props) {
   );
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [moduleId, setModuleId] = useState(ROADMAP[0]?.id ?? "");
+  const [moduleId, setModuleId] = useState(defaultModuleId);
+  const [roadmapItemId, setRoadmapItemId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [liveUrl, setLiveUrl] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
@@ -159,7 +162,8 @@ export default function Projects({ user }: Props) {
   function resetForm() {
     setOpened(false);
     setEditingProject(null);
-    setModuleId(ROADMAP[0]?.id ?? "");
+    setModuleId(defaultModuleId);
+    setRoadmapItemId(null);
     setTitle("");
     setLiveUrl("");
     setGithubUrl("");
@@ -170,6 +174,7 @@ export default function Projects({ user }: Props) {
   function startEdit(project: UserProject) {
     setEditingProject(project);
     setModuleId(project.module_id);
+    setRoadmapItemId(project.roadmap_item_id);
     setTitle(project.title);
     setLiveUrl(project.live_url ?? "");
     setGithubUrl(project.github_url ?? "");
@@ -200,6 +205,7 @@ export default function Projects({ user }: Props) {
 
     const projectInput: ProjectInput = {
       moduleId,
+      roadmapItemId,
       title,
       liveUrl: normalizedLiveUrl ?? "",
       githubUrl: normalizedGithubUrl ?? "",
@@ -244,7 +250,19 @@ export default function Projects({ user }: Props) {
     setError("");
     setSuccessMessage("");
     setDeletingId(projectId);
+    const project = projects.find((item) => item.id === projectId);
+    let roadmapProgressReset = false;
     try {
+      if (
+        project?.roadmap_item_id &&
+        !(await onRoadmapProjectDeleted(project.roadmap_item_id))
+      ) {
+        setError(
+          "Roadmap progress could not be reset. The project was not removed.",
+        );
+        return;
+      }
+      roadmapProgressReset = Boolean(project?.roadmap_item_id);
       await deleteUserProject(projectId);
       setProjects((current) =>
         current.filter((project) => project.id !== projectId),
@@ -253,7 +271,15 @@ export default function Projects({ user }: Props) {
       notifyLeaderboardUpdated();
       setSuccessMessage("Project removed successfully.");
     } catch (deleteError: unknown) {
-      setError(getErrorMessage(deleteError, "Unable to remove this project."));
+      const message = getErrorMessage(
+        deleteError,
+        "Unable to remove this project.",
+      );
+      setError(
+        roadmapProgressReset
+          ? `Roadmap progress was reset and points were removed, but the project could not be deleted: ${message}`
+          : message,
+      );
     } finally {
       setDeletingId(null);
     }
@@ -307,7 +333,8 @@ export default function Projects({ user }: Props) {
                 setError("");
                 setSuccessMessage("");
                 setEditingProject(null);
-                setModuleId(ROADMAP[0]?.id ?? "");
+                setModuleId(defaultModuleId);
+                setRoadmapItemId(null);
                 setTitle("");
                 setLiveUrl("");
                 setGithubUrl("");
@@ -407,7 +434,21 @@ export default function Projects({ user }: Props) {
                                 align="center"
                                 wrap="nowrap"
                               >
-                                <Title order={4}>{project.title}</Title>
+                                <Group gap="xs" wrap="wrap">
+                                  <Title order={4}>{project.title}</Title>
+                                  <Badge
+                                    color={
+                                      project.roadmap_item_id
+                                        ? "orange"
+                                        : "gray"
+                                    }
+                                    variant="light"
+                                  >
+                                    {project.roadmap_item_id
+                                      ? "Roadmap project"
+                                      : "Personal project"}
+                                  </Badge>
+                                </Group>
                                 {project.user_id === user.id && (
                                   <Group
                                     className="project-card-actions"
@@ -480,7 +521,11 @@ export default function Projects({ user }: Props) {
                                 className="project-delete-confirm"
                                 justify="space-between"
                               >
-                                <Text size="xs">Remove this project?</Text>
+                                <Text size="xs">
+                                  {project.roadmap_item_id
+                                    ? "Removing this roadmap project will reset its roadmap progress and remove awarded points."
+                                    : "Remove this project?"}
+                                </Text>
                                 <Group gap="xs">
                                   <Button
                                     size="xs"
@@ -535,7 +580,16 @@ export default function Projects({ user }: Props) {
                   label: module.title,
                 }))}
                 value={moduleId}
-                onChange={(value) => value && setModuleId(value)}
+                onChange={(value) => {
+                  if (!value) return;
+                  setModuleId(value);
+                  const linkedModule = ROADMAP.find((module) =>
+                    module.topics.some((topic) => topic.id === roadmapItemId),
+                  );
+                  if (roadmapItemId && linkedModule?.id !== value) {
+                    setRoadmapItemId(null);
+                  }
+                }}
                 allowDeselect={false}
                 required
               />

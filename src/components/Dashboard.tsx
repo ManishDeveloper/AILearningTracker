@@ -303,6 +303,43 @@ export default function Dashboard({
     );
   }
 
+  async function resetRoadmapProject(topicId: string): Promise<boolean> {
+    const previous = progress.topicDetails[topicId];
+    const wasComplete =
+      previous?.status === "complete" ||
+      progress.completedTopics.includes(topicId);
+    const wasInProgress = previous?.status === "in_progress";
+    if (!wasComplete && !wasInProgress) return true;
+
+    const topic = ROADMAP.flatMap((module) => module.topics).find(
+      (item) => item.id === topicId,
+    );
+    const points = wasComplete ? pointsForTopic(topicId) : 0;
+    return update(
+      {
+        completedTopics: progress.completedTopics.filter(
+          (id) => id !== topicId,
+        ),
+        topicDetails: {
+          ...progress.topicDetails,
+          [topicId]: {
+            status: "not_started",
+            durationHours: previous?.durationHours ?? 24,
+            startedAt: null,
+          },
+        },
+      },
+      -points,
+      wasComplete
+        ? {
+            title: "Roadmap project removed",
+            message: `${topic?.title ?? "Roadmap project"} was reset and ${points} points were removed.`,
+            color: "orange",
+          }
+        : undefined,
+    );
+  }
+
   function resetRoadmap(): Promise<boolean> {
     const completedTopics = new Set(progress.completedTopics);
     const completedCount = completedTopics.size;
@@ -423,6 +460,15 @@ export default function Dashboard({
                 </Indicator>
               </ActionIcon>
             </Tooltip>
+            <Button
+              className="header-how-to-start"
+              variant="light"
+              size="sm"
+              leftSection={<IconHelpCircle size={16} />}
+              onClick={() => setHelpGuideOpen(true)}
+            >
+              How to start
+            </Button>
             <Menu position="bottom-end" withArrow shadow="md">
               <Menu.Target>
                 <Button
@@ -441,13 +487,6 @@ export default function Dashboard({
                 </Button>
               </Menu.Target>
               <Menu.Dropdown className="profile-menu-dropdown">
-                <Menu.Item
-                  className="profile-menu-item"
-                  leftSection={<IconHelpCircle size={16} />}
-                  onClick={() => setHelpGuideOpen(true)}
-                >
-                  Help &amp; guide
-                </Menu.Item>
                 <Menu.Item
                   className="profile-menu-item"
                   leftSection={<IconUserEdit size={16} />}
@@ -532,7 +571,12 @@ export default function Dashboard({
                     onComplete={completeTopic}
                   />
                 )}
-                {tab === "Projects" && <Projects user={user} />}
+                {tab === "Projects" && (
+                  <Projects
+                    user={user}
+                    onRoadmapProjectDeleted={resetRoadmapProject}
+                  />
+                )}
                 {tab === "Activity" && <ActivityFeed currentUserId={user.id} />}
               </section>
 
